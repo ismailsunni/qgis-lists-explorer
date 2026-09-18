@@ -22,8 +22,9 @@ distributed project's working week. Switch lists with the toggle in the header.
 | Activity over time | How has list traffic changed? (drag to filter everything else) |
 | Most active people | Who writes the most, in any period you pick? |
 | When people write | Which weekday/hour does the project actually work? |
-| Contributor table | Sortable, searchable per-person stats with a per-year sparkline |
-| Threads | Which discussions drew the most replies, and which never died? |
+| Messages per person | How lopsided is participation? |
+| Contributor table | Sortable, searchable per-person stats, time span, per-year sparkline |
+| Threads | Which discussions drew the most replies, and which never died? (sort any column) |
 | Sender domains | Share of traffic by the domain people write from |
 | Newcomers and regulars | Is the community renewing itself? |
 
@@ -76,6 +77,9 @@ Four parsing details worth knowing:
   display name are merged into one person — several long-time contributors changed
   employer (and address) over the years. The table shows `+N` when a person's
   merged addresses span more than one domain.
+- **The thread table** sorts on any column, over a pool of the 400 largest threads
+  plus the 300 longest-running — so a sort is "within the notable threads", not
+  across all 16,000.
 - **Threads** are rebuilt from `References`/`In-Reply-To`, falling back to
   normalised subjects within a 90-day window. Subjects with no content of their own
   ("(no subject)", one-word stubs) are excluded from that fallback, or they collect

@@ -207,6 +207,15 @@ def main():
     name_of = {p: public_name(a["names"].most_common(1)[0][0]) for p, a in authors.items()}
     years = sorted({m["ts"].year for m in msgs})
 
+    def dedup(ts):
+        seen, out = set(), []
+        for t in ts:
+            k = (t["subject"], t["start"])
+            if k not in seen:
+                seen.add(k)
+                out.append(t)
+        return out
+
     def view(sel):
         """Every aggregate, recomputed over whichever messages are in play — so
         hiding automated senders moves the charts, not just the people count."""
@@ -249,9 +258,11 @@ def main():
                          threads=started[str(y)], people=len(active[y]),
                          newcomers=newcomers[y], returning=len(active[y] & active[y - 1]))
                     for y in years],
-            topThreads=sorted(thread_list, key=lambda t: -t["n"])[:400],
-            longestThreads=sorted([t for t in thread_list if t["n"] >= 5],
-                                  key=lambda t: -t["days"])[:400],
+            # One pool the table can sort any way: the biggest threads by reply
+            # count, plus the longest-running ones that a size cut would miss.
+            threads=dedup(sorted(thread_list, key=lambda t: -t["n"])[:400]
+                          + sorted([t for t in thread_list if t["n"] >= 5],
+                                   key=lambda t: -t["days"])[:300]),
             heatmapByYear={str(y): [[c[(d, h)] for h in range(24)] for d in range(7)]
                            for y, c in hourly_year.items()},
             domains=[dict(d=d, n=sum(c.values()), years={str(k): v for k, v in sorted(c.items())})

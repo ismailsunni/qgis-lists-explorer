@@ -64,10 +64,12 @@
     </div>
     <div class="card">
       <div class="card-head"><div>
-        <h2>When people write</h2>
-        <p class="hint">Messages by weekday and hour, in each sender's own local time.</p>
+        <h2>Messages per person</h2>
+        <p class="hint">How many people wrote how much. Open-source participation is
+          lopsided by nature; this is the shape of it.</p>
       </div></div>
-      <div class="chart" id="heatmap"></div>
+      <div class="chart" id="histogram"></div>
+      <p class="note" id="histNote"></p>
     </div>
   </section>
 
@@ -87,11 +89,9 @@
     <div class="card-head">
       <div>
         <h2>Threads</h2>
-        <p class="hint">Threads are rebuilt from message references, falling back to normalised subjects. Titles link to the monthly archive.</p>
-      </div>
-      <div class="seg" id="threadTab" role="group" aria-label="Thread ranking">
-        <button data-v="top" class="on">Most replies</button>
-        <button data-v="long">Longest running</button>
+        <p class="hint">The biggest threads by replies and by duration, rebuilt from message
+          references and falling back to normalised subjects. Click a column to sort; titles link
+          to the monthly archive.</p>
       </div>
     </div>
     <div class="scroll"><table id="threadTable" class="data"></table></div>
@@ -101,18 +101,26 @@
   <section class="grid-2">
     <div class="card">
       <div class="card-head"><div>
+        <h2>When people write</h2>
+        <p class="hint">Messages by weekday and hour, in each sender's own local time.</p>
+      </div></div>
+      <div class="chart" id="heatmap"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div>
         <h2>Sender domains</h2>
         <p class="hint">Share of messages per year by the domain people send from. Free mail providers dominate, so this says where mail comes from, not who pays for the work.</p>
       </div></div>
       <div class="chart" id="orgs"></div>
     </div>
-    <div class="card">
-      <div class="card-head"><div>
-        <h2>Newcomers and regulars</h2>
-        <p class="hint">People posting for the first time each year, against those who also posted the year before.</p>
-      </div></div>
-      <div class="chart" id="churn"></div>
-    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div>
+      <h2>Newcomers and regulars</h2>
+      <p class="hint">People posting for the first time each year, against those who also posted the year before.</p>
+    </div></div>
+    <div class="chart" id="churn"></div>
   </section>
 
   <footer class="foot">

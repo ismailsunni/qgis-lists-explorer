@@ -21,7 +21,14 @@ const MILESTONES = [
 ];
 
 let D, state = { list: "qgis-developer", y0: 0, y1: 0, metric: "n", tab: "top",
-                 sort: "n", desc: true, q: "", hideBots: false, marks: true, limit: 25, tlimit: 20 };
+                 peopleSort: { k: "n", desc: true }, threadSort: { k: "n", desc: true },
+                 q: "", hideBots: false, marks: true, limit: 25, tlimit: 20 };
+
+/** A bar whose data-end is rounded and whose baseline end is square. */
+const barPath = (x, y, w, h, r = 4) => {
+  r = Math.min(r, w / 2, h);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+};
 
 const el = (tag, attrs = {}, kids = []) => {
   const e = document.createElementNS(NS, tag);
@@ -51,6 +58,10 @@ function showTip(e, html) {
 const hideTip = () => { tip.hidden = true; };
 
 const inRange = y => y >= state.y0 && y <= state.y1;
+const months = (a, b) => (+b.slice(0, 4) - +a.slice(0, 4)) * 12 + (+b.slice(5) - +a.slice(5));
+const spanLabel = m => m >= 12
+  ? `${Math.floor(m / 12)}y${m % 12 ? " " + (m % 12) + "m" : ""}`
+  : m > 0 ? `${m}m` : "once";
 const people = () => D.authors.filter(a => !(state.hideBots && a.bot));
 /** Aggregates come in two prebuilt variants so the bot toggle moves every
     chart, not just the people list. */
@@ -356,7 +367,7 @@ function renderChurn() {
   years.forEach((yr, i) => {
     [["newcomers", "var(--s1)", 0], ["returning", "var(--s2)", 1]].forEach(([k, c, s]) => {
       const w = Math.max(2, bw * .36), bx = P.l + i * bw + bw * .12 + s * (w + 2);
-      const r = el("rect", { x: bx, y: y(yr[k]), width: w, height: Math.max(1, y(0) - y(yr[k])), rx: 3, fill: c });
+      const r = el("path", { d: barPath(bx, y(yr[k]), w, Math.max(1, y(0) - y(yr[k])), 3), fill: c });
       r.addEventListener("pointermove", e => showTip(e,
         `<b>${yr.y}</b><br>${fmt(yr.newcomers)} first-time posters<br>${fmt(yr.returning)} also posted the year before<br>
          <span class="k">${fmt(yr.people)} people active, ${fmt(yr.n)} messages</span>`));
@@ -394,53 +405,121 @@ function renderPeopleTable() {
     ["threads", "Threads joined", r => fmt(r.threads), "num"],
     ["first", "First", r => r.first, "num dim"],
     ["last", "Last", r => r.last, "num dim"],
+    ["span", "Span", r => spanLabel(r.span), "num dim"],
     ["spark", "Per year", r => spark(r.years), "l"],
   ];
-  let rows = people().map(a => ({ ...a, sum: sumYears(a.years) })).filter(a => a.sum > 0);
+  let rows = people().map(a => ({ ...a, sum: sumYears(a.years), span: months(a.first, a.last) }))
+    .filter(a => a.sum > 0);
   if (state.q) {
     const q = state.q.toLowerCase();
     rows = rows.filter(a => a.name.toLowerCase().includes(q) || a.domain.includes(q));
   }
-  const k = state.sort === "n" ? "sum" : state.sort;
+  const st = state.peopleSort, k = st.k === "n" ? "sum" : st.k;
   rows.sort((a, b) => {
     const [x, y] = [a[k], b[k]];
     const c = typeof x === "string" ? x.localeCompare(y) : x - y;
-    return state.desc ? -c : c;
+    return st.desc ? -c : c;
   });
   const total = rows.length;
   rows = rows.slice(0, state.limit);
   rows.forEach((r, i) => { r.rank = i + 1; });
   $("#peopleTable").innerHTML =
     `<thead><tr>${cols.map(c => `<th data-k="${c[0]}" class="${c[3].includes("l") ? "l" : ""}">${c[1]}${
-      (c[0] === state.sort || (c[0] === "sum" && state.sort === "n")) ? (state.desc ? " ↓" : " ↑") : ""}</th>`).join("")}</tr></thead>` +
+      (c[0] === st.k || (c[0] === "sum" && st.k === "n")) ? (st.desc ? " ↓" : " ↑") : ""}</th>`).join("")}</tr></thead>` +
     `<tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c[3]}">${c[2](r)}</td>`).join("")}</tr>`).join("")}</tbody>`;
   $("#peopleMore").hidden = total <= state.limit;
   $("#peopleMore").textContent = `Show more (${fmt(total - rows.length)} left)`;
-  $("#peopleTable").querySelectorAll("th").forEach(th => th.onclick = () => {
-    const k = th.dataset.k === "sum" ? "n" : th.dataset.k;
-    state.desc = state.sort === k ? !state.desc : true;
-    state.sort = k;
-    renderPeopleTable();
+  sortable($("#peopleTable"), cols, "peopleSort", renderPeopleTable);
+}
+
+/** Wire a table head for click-to-sort, toggling direction on re-click. */
+function sortable(table, cols, stateKey, render) {
+  table.querySelectorAll("th").forEach(th => th.onclick = () => {
+    const k = th.dataset.k;
+    if (!k) return;
+    const st = state[stateKey];
+    st.desc = st.k === k ? !st.desc : true;
+    st.k = k;
+    render();
   });
 }
 
 const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 function renderThreadTable() {
-  const src = state.tab === "top" ? V().topThreads : V().longestThreads;
-  const all = src.filter(t => inRange(+t.start.slice(0, 4)));
+  const cols = [
+    ["subject", "Thread", t => `<a href="${t.url}" target="_blank" rel="noopener">${esc(t.subject)}</a>`, "l subj"],
+    ["starter", "Started by", t => esc(t.starter), "l dim"],
+    ["n", "Messages", t => fmt(t.n), "num"],
+    ["people", "People", t => fmt(t.people), "num"],
+    ["days", "Ran for", t => t.days === 0 ? "same day" : fmt(t.days) + " days", "num"],
+    ["start", "Started", t => t.start, "l num dim"],
+  ];
+  const st = state.threadSort;
+  const all = V().threads.filter(t => inRange(+t.start.slice(0, 4)));
+  all.sort((a, b) => {
+    const [x, y] = [a[st.k], b[st.k]];
+    const c = typeof x === "string" ? x.localeCompare(y) : x - y;
+    return st.desc ? -c : c;
+  });
   const rows = all.slice(0, state.tlimit);
-  const head = `<thead><tr><th class="l">Thread</th><th class="l">Started by</th>
-    <th>Messages</th><th>People</th><th>Ran for</th><th class="l">Started</th></tr></thead>`;
-  $("#threadTable").innerHTML = head + `<tbody>${rows.map(t => `<tr>
-    <td class="l subj"><a href="${t.url}" target="_blank" rel="noopener">${esc(t.subject)}</a></td>
-    <td class="l dim">${esc(t.starter)}</td>
-    <td class="num">${fmt(t.n)}</td><td class="num">${fmt(t.people)}</td>
-    <td class="num">${t.days === 0 ? "same day" : t.days + " days"}</td>
-    <td class="l num dim">${t.start}</td></tr>`).join("")}</tbody>` +
-    (rows.length ? "" : `<tbody><tr><td class="l dim">No threads in this period.</td></tr></tbody>`);
+  const tbl = $("#threadTable");
+  tbl.innerHTML =
+    `<thead><tr>${cols.map(c => `<th data-k="${c[0]}" class="${c[3].includes("l") ? "l" : ""}">${c[1]}${
+      c[0] === st.k ? (st.desc ? " ↓" : " ↑") : ""}</th>`).join("")}</tr></thead>` +
+    `<tbody>${rows.map(t => `<tr>${cols.map(c => `<td class="${c[3]}">${c[2](t)}</td>`).join("")}</tr>`).join("")
+      || `<tr><td class="l dim">No threads in this period.</td></tr>`}</tbody>`;
   $("#threadMore").hidden = all.length <= rows.length;
   $("#threadMore").textContent = `Show more (${fmt(all.length - rows.length)} left)`;
+  sortable(tbl, cols, "threadSort", renderThreadTable);
+}
+
+/* ------------------------------------------ messages per person (hist) */
+const BUCKETS = [[1, 1], [2, 2], [3, 5], [6, 10], [11, 25], [26, 100], [101, 500], [501, Infinity]];
+const bucketLabel = ([a, b]) => b === Infinity ? `${a}+` : a === b ? `${a}` : `${a}–${b}`;
+
+function renderHistogram() {
+  const host = $("#histogram");
+  const counts = people().map(a => sumYears(a.years)).filter(n => n > 0).sort((a, b) => b - a);
+  const H = 232, P = { t: 22, r: 10, l: 36, b: 40 };
+  const [svg, W] = root(host, H);
+  if (!counts.length) return;
+  const bins = BUCKETS.map(([lo, hi]) => {
+    const inBin = counts.filter(n => n >= lo && n <= hi);
+    return { lo, hi, people: inBin.length, msgs: inBin.reduce((a, b) => a + b, 0) };
+  });
+  const total = counts.reduce((a, b) => a + b, 0);
+  const iw = W - P.l - P.r, ih = H - P.t - P.b;
+  const ticks = niceTicks(Math.max(...bins.map(b => b.people)), 3);
+  const max = ticks.at(-1), bw = iw / bins.length;
+  const y = v => P.t + ih - (ih * v) / max;
+  for (const v of ticks) {
+    svg.appendChild(el("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), stroke: "var(--grid)" }));
+    svg.appendChild(text(P.l - 7, y(v) + 4, fmt(v), { "text-anchor": "end" }));
+  }
+  bins.forEach((b, i) => {
+    const w = Math.max(3, Math.min(46, bw - 12)), bx = P.l + i * bw + (bw - w) / 2;
+    const r = el("path", { d: barPath(bx, y(b.people), w, Math.max(1, y(0) - y(b.people))), fill: "var(--s1)" });
+    r.addEventListener("pointermove", e => showTip(e,
+      `<b>${bucketLabel([b.lo, b.hi])} message${b.hi === 1 ? "" : "s"}</b><br>
+       ${fmt(b.people)} people <span class="k">(${(b.people / counts.length * 100).toFixed(1)}% of writers)</span><br>
+       ${fmt(b.msgs)} messages <span class="k">(${(b.msgs / total * 100).toFixed(1)}% of traffic)</span>`));
+    r.addEventListener("pointerleave", hideTip);
+    svg.appendChild(r);
+    svg.appendChild(text(bx + w / 2, y(b.people) - 6, fmt(b.people),
+      { "text-anchor": "middle", fill: "var(--ink-2)", "font-size": 11 }));
+    svg.appendChild(text(bx + w / 2, H - P.b + 16, bucketLabel([b.lo, b.hi]), { "text-anchor": "middle" }));
+  });
+  svg.appendChild(el("line", { x1: P.l, x2: W - P.r, y1: y(0), y2: y(0), stroke: "var(--axis)" }));
+  svg.appendChild(text(P.l, H - 6, "messages sent by one person", { "font-size": 11 }));
+
+  // the headline the shape is really about
+  let acc = 0, half = 0;
+  while (acc < total / 2 && half < counts.length) acc += counts[half++];
+  const once = bins[0].people / counts.length * 100;
+  $("#histNote").innerHTML =
+    `Half of all messages come from <b>${fmt(half)}</b> ${half === 1 ? "person" : "people"}
+     (${(half / counts.length * 100).toFixed(1)}% of writers); <b>${once.toFixed(0)}%</b> wrote exactly once.`;
 }
 
 /* -------------------------------------------------------- plumbing */
@@ -456,7 +535,7 @@ function renderAll() {
   const yrs = V().yearly.filter(y => inRange(y.y));
   $("#rangeNote").textContent =
     `${fmt(yrs.reduce((a, y) => a + y.n, 0))} messages in ${state.y1 - state.y0 + 1} year${state.y1 > state.y0 ? "s" : ""}`;
-  renderTiles(); renderTimeline(); renderPeopleChart(); renderHeatmap();
+  renderTiles(); renderTimeline(); renderPeopleChart(); renderHistogram(); renderHeatmap();
   renderOrgs(); renderChurn(); renderPeopleTable(); renderThreadTable();
 }
 
@@ -488,12 +567,6 @@ function boot(data, keepRange) {
     state.metric = e.target.dataset.v;
     $("#metric").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === e.target));
     renderTimeline();
-  };
-  $("#threadTab").onclick = e => {
-    if (!e.target.dataset.v) return;
-    state.tab = e.target.dataset.v; state.tlimit = 20;
-    $("#threadTab").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === e.target));
-    renderThreadTable();
   };
   $("#search").oninput = e => { state.q = e.target.value.trim(); state.limit = 25; renderPeopleTable(); };
   $("#peopleMore").onclick = () => { state.limit += 50; renderPeopleTable(); };
