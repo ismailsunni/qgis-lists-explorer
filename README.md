@@ -1,19 +1,21 @@
 # QGIS mailing list explorer
 
-An interactive view of twenty years of the two QGIS mailing lists —
-[qgis-developer](https://lists.osgeo.org/pipermail/qgis-developer/) and
-[qgis-user](https://lists.osgeo.org/pipermail/qgis-user/): activity trends, the
-people behind the traffic, the threads that ran longest, and the rhythm of a
-distributed project's working week. Switch lists with the toggle in the header.
+An interactive view of twenty years of the QGIS mailing lists —
+[qgis-developer](https://lists.osgeo.org/pipermail/qgis-developer/),
+[qgis-user](https://lists.osgeo.org/pipermail/qgis-user/) and
+[qgis-psc](https://lists.osgeo.org/pipermail/qgis-psc/), the Project Steering
+Committee's list: activity trends, the people behind the traffic, who works with
+whom, the threads that ran longest, and the rhythm of a distributed project's
+working week. Switch lists with the toggle in the header.
 
 **→ [ismailsunni.id/qgis-lists-explorer](https://ismailsunni.id/qgis-lists-explorer/)**
 
-|  | qgis-developer | qgis-user |
-|---|---|---|
-| Messages | 68,529 | 56,473 |
-| Threads | 16,897 | 16,416 |
-| People | 2,044 | 4,873 |
-| Span | 2006–2026 | 2008–2026 |
+|  | qgis-developer | qgis-user | qgis-psc |
+|---|---|---|---|
+| Messages | 68,529 | 56,473 | 10,835 |
+| Threads | 16,895 | 16,415 | 1,747 |
+| People | 2,044 | 4,873 | 166 |
+| Span | 2006–2026 | 2008–2026 | 2008–2026 |
 
 ## What it shows
 
@@ -24,6 +26,7 @@ distributed project's working week. Switch lists with the toggle in the header.
 | When people write | Which weekday/hour does the project actually work? |
 | Messages per person | How lopsided is participation? |
 | Contributor table | Sortable, searchable per-person stats, time span, per-year sparkline |
+| Who talks with whom | Co-participation graph: who shares threads with whom |
 | Threads | Which discussions drew the most replies, and which never died? (sort any column) |
 | Sender domains | Share of traffic by the domain people write from |
 | Newcomers and regulars | Is the community renewing itself? |
@@ -77,6 +80,11 @@ Four parsing details worth knowing:
   display name are merged into one person — several long-time contributors changed
   employer (and address) over the years. The table shows `+N` when a person's
   merged addresses span more than one domain.
+- **The graph** joins two people when they appear in the same thread. It covers the
+  80 most active people per list, keeps the 4,000 strongest pairs, and stores a
+  per-year count for each, so the period filter and the bot toggle drive it like
+  everything else. The layout is a deterministic force simulation — the same data
+  always settles the same way, so filtering does not reshuffle the picture.
 - **The thread table** sorts on any column, over a pool of the 400 largest threads
   plus the 300 longest-running — so a sort is "within the notable threads", not
   across all 16,000.

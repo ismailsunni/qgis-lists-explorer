@@ -14,6 +14,8 @@ LIST = sys.argv[1] if len(sys.argv) > 1 else "qgis-developer"
 RAW = f"raw/{LIST}"
 OUT = f"docs/data/{LIST}.json"
 LIST_URL = f"https://lists.osgeo.org/pipermail/{LIST}"
+GRAPH_NODES = 80     # people in the co-participation graph
+GRAPH_EDGES = 4000   # strongest pairs kept
 
 def dec(s):
     if not s:
@@ -27,7 +29,7 @@ def deobfuscate(addr):
     return re.sub(r"\s+at\s+", "@", addr or "", flags=re.I).strip().strip("<>").lower()
 
 SUBJ_CLEAN = re.compile(
-    r"^(?:\s*(?:re|aw|fwd?|antw|res|sv|vs|r)\s*[:\]]\s*|\s*\[qgis[- ]?(?:developer|user)\]\s*)+", re.I)
+    r"^(?:\s*(?:re|aw|fwd?|antw|res|sv|vs|r)\s*[:\]]\s*|\s*\[qgis[- ]?(?:developer|user|psc)\]\s*)+", re.I)
 def norm_subject(s):
     prev = None
     s = s or ""
@@ -248,10 +250,36 @@ def main():
                 starter=name_of[starter["pid"]],
                 url=f"{LIST_URL}/{starter['archive']}/thread.html",
             ))
+        # ---- co-participation graph ----
+        # Who shares threads with whom, among the people who write most. Edges
+        # keep a per-year breakdown so the period filter drives the graph too.
+        msg_count = Counter(m["pid"] for m in sel)
+        pid_years = defaultdict(Counter)
+        for m in sel:
+            pid_years[m["pid"]][m["ts"].year] += 1
+        top = [p for p, _ in msg_count.most_common(GRAPH_NODES)]
+        idx = {p: i for i, p in enumerate(top)}
+        edges = defaultdict(Counter)
+        for ms in grouped.values():
+            here = sorted({idx[m["pid"]] for m in ms if m["pid"] in idx})
+            if len(here) < 2:
+                continue
+            y = str(ms[0]["ts"].year)
+            for a in range(len(here)):
+                for b in range(a + 1, len(here)):
+                    edges[(here[a], here[b])][y] += 1
+
         started = Counter(t["start"][:4] for t in thread_list)
         newcomers = Counter(first_year.values())
 
         return dict(
+            graph=dict(
+                nodes=[dict(name=name_of[p], domain=authors[p]["emails"].most_common(1)[0][0].split("@")[-1],
+                            years={str(k): v for k, v in sorted(pid_years[p].items())})
+                       for p in top],
+                edges=[[a, b, dict(ys)] for (a, b), ys in
+                       sorted(edges.items(), key=lambda kv: -sum(kv[1].values()))[:GRAPH_EDGES]],
+            ),
             monthly=[dict(m=k, n=monthly[k], p=len(m_people[k]), t=len(m_threads[k]))
                      for k in sorted(monthly)],
             yearly=[dict(y=y, n=sum(v for k, v in monthly.items() if k.startswith(str(y))),

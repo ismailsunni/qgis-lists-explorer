@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 LISTS=("$@")
-[ ${#LISTS[@]} -eq 0 ] && LISTS=(qgis-developer qgis-user)
+[ ${#LISTS[@]} -eq 0 ] && LISTS=(qgis-developer qgis-user qgis-psc)
 
 for LIST in "${LISTS[@]}"; do
   BASE="https://lists.osgeo.org/pipermail/$LIST"

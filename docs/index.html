@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>QGIS Mailing List Explorer</title>
-<meta name="description" content="Twenty years of the QGIS developer and user mailing lists: activity trends, contributors, threads and rhythms.">
+<meta name="description" content="Twenty years of the QGIS developer, user and steering-committee mailing lists: activity trends, contributors, threads and rhythms.">
 <!-- The OSGeo archives are themselves marked noindex; this page carries names
      from them, so it keeps the source's posture. See README > Privacy. -->
 <meta name="robots" content="noindex, follow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📬</text></svg>">
-<link rel="stylesheet" href="style.css?v=9aa688a75a">
+<link rel="stylesheet" href="style.css?v=eb97f14292">
 </head>
 <body>
 <header class="top">
@@ -20,8 +20,9 @@
     </div>
     <div class="top-controls">
       <div class="seg" id="listPick" role="group" aria-label="Mailing list">
-        <button data-v="qgis-developer" class="on">qgis-developer</button>
-        <button data-v="qgis-user">qgis-user</button>
+        <button data-v="qgis-developer" class="on" title="qgis-developer">developer</button>
+        <button data-v="qgis-user" title="qgis-user">user</button>
+        <button data-v="qgis-psc" title="qgis-psc — the Project Steering Committee list">psc</button>
       </div>
       <button id="theme" class="ghost" title="Switch theme" aria-label="Switch theme">◐</button>
     </div>
@@ -88,6 +89,22 @@
   <section class="card">
     <div class="card-head">
       <div>
+        <h2>Who talks with whom</h2>
+        <p class="hint">The 80 most active people, joined when they appear in the same thread.
+          Node size is messages sent; line weight is threads shared.</p>
+      </div>
+      <label class="check">Min. shared threads
+        <input type="range" id="minEdge" min="1" max="40" value="5">
+        <b id="minEdgeVal">5</b>
+      </label>
+    </div>
+    <div class="chart" id="graph"></div>
+    <p class="note" id="graphNote"></p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
         <h2>Threads</h2>
         <p class="hint">The biggest threads by replies and by duration, rebuilt from message
           references and falling back to normalised subjects. Click a column to sort; titles link
@@ -133,6 +150,6 @@
 </main>
 
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=eefe5f50ad"></script>
+<script src="app.js?v=f4fc64c36b"></script>
 </body>
 </html>
