@@ -26,3 +26,5 @@ for LIST in "${LISTS[@]}"; do
 
   python3 scripts/parse.py "$LIST"
 done
+
+python3 scripts/stamp.py

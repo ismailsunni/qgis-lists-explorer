@@ -102,6 +102,18 @@ Closed months are never re-fetched. A GitHub Action runs the same script on the
 2nd of each month and commits the result; GitHub Pages serves `docs/` directly, so
 a refreshed JSON is all a new deploy needs.
 
+## Editing the page
+
+`docs/index.html` links `app.js` and `style.css` with a content hash
+(`app.js?v=…`). After editing either, run:
+
+```sh
+python3 scripts/stamp.py
+```
+
+Without it a deploy can hand a browser the new HTML beside a cached old script,
+which fails in confusing ways. `update.sh` runs it for you.
+
 ## Local preview
 
 ```sh

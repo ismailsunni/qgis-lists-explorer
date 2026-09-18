@@ -30,6 +30,10 @@ const barPath = (x, y, w, h, r = 4) => {
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 };
 
+/** Bind a handler only if the element is there, so an HTML change can never
+    take the whole page down with it (a stale cached app.js, say). */
+const on = (sel, ev, fn) => { const e = $(sel); if (e) e[ev] = fn; };
+
 const el = (tag, attrs = {}, kids = []) => {
   const e = document.createElementNS(NS, tag);
   for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
@@ -427,8 +431,8 @@ function renderPeopleTable() {
     `<thead><tr>${cols.map(c => `<th data-k="${c[0]}" class="${c[3].includes("l") ? "l" : ""}">${c[1]}${
       (c[0] === st.k || (c[0] === "sum" && st.k === "n")) ? (st.desc ? " ↓" : " ↑") : ""}</th>`).join("")}</tr></thead>` +
     `<tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c[3]}">${c[2](r)}</td>`).join("")}</tr>`).join("")}</tbody>`;
-  $("#peopleMore").hidden = total <= state.limit;
-  $("#peopleMore").textContent = `Show more (${fmt(total - rows.length)} left)`;
+  if ($("#peopleMore")) $("#peopleMore").hidden = total <= state.limit;
+  if ($("#peopleMore")) $("#peopleMore").textContent = `Show more (${fmt(total - rows.length)} left)`;
   sortable($("#peopleTable"), cols, "peopleSort", renderPeopleTable);
 }
 
@@ -469,8 +473,8 @@ function renderThreadTable() {
       c[0] === st.k ? (st.desc ? " ↓" : " ↑") : ""}</th>`).join("")}</tr></thead>` +
     `<tbody>${rows.map(t => `<tr>${cols.map(c => `<td class="${c[3]}">${c[2](t)}</td>`).join("")}</tr>`).join("")
       || `<tr><td class="l dim">No threads in this period.</td></tr>`}</tbody>`;
-  $("#threadMore").hidden = all.length <= rows.length;
-  $("#threadMore").textContent = `Show more (${fmt(all.length - rows.length)} left)`;
+  if ($("#threadMore")) $("#threadMore").hidden = all.length <= rows.length;
+  if ($("#threadMore")) $("#threadMore").textContent = `Show more (${fmt(all.length - rows.length)} left)`;
   sortable(tbl, cols, "threadSort", renderThreadTable);
 }
 
@@ -555,24 +559,24 @@ function boot(data, keepRange) {
   for (const id of ["y0", "y1"]) {
     $("#" + id).innerHTML = D.years.map(y => `<option>${y}</option>`).join("");
     $("#" + id).value = state[id];
-    $("#" + id).onchange = () => setRange(+$("#y0").value, +$("#y1").value);
+    on("#" + id, "onchange", () => setRange(+$("#y0").value, +$("#y1").value));
   }
   const last = D.years.at(-1);
   const presets = [["All", D.years[0], last], ["Last 5 years", last - 4, last],
                    ["2020s", 2020, last], ["2010s", 2010, 2019], ["2006–2009", 2006, 2009]];
   $("#presets").innerHTML = presets.map((p, i) => `<button data-i="${i}">${p[0]}</button>`).join("");
-  $("#presets").onclick = e => { const i = e.target.dataset.i; if (i) setRange(presets[i][1], presets[i][2]); };
-  $("#metric").onclick = e => {
+  on("#presets", "onclick", e => { const i = e.target.dataset.i; if (i) setRange(presets[i][1], presets[i][2]); });
+  on("#metric", "onclick", e => {
     if (!e.target.dataset.v) return;
     state.metric = e.target.dataset.v;
     $("#metric").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === e.target));
     renderTimeline();
-  };
-  $("#search").oninput = e => { state.q = e.target.value.trim(); state.limit = 25; renderPeopleTable(); };
-  $("#peopleMore").onclick = () => { state.limit += 50; renderPeopleTable(); };
-  $("#threadMore").onclick = () => { state.tlimit += 40; renderThreadTable(); };
-  $("#bots").onchange = e => { state.hideBots = e.target.checked; state.limit = 25; renderAll(); };
-  $("#marks").onchange = e => { state.marks = e.target.checked; renderTimeline(); };
+  });
+  on("#search", "oninput", e => { state.q = e.target.value.trim(); state.limit = 25; renderPeopleTable(); });
+  on("#peopleMore", "onclick", () => { state.limit += 50; renderPeopleTable(); });
+  on("#threadMore", "onclick", () => { state.tlimit += 40; renderThreadTable(); });
+  on("#bots", "onchange", e => { state.hideBots = e.target.checked; state.limit = 25; renderAll(); });
+  on("#marks", "onchange", e => { state.marks = e.target.checked; renderTimeline(); });
   $("#app").hidden = false;
   renderAll();
 }
@@ -585,12 +589,12 @@ function wire() {
   addEventListener("resize", () => { clearTimeout(t); t = setTimeout(renderAll, 150); });
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAll);
   addEventListener("hashchange", () => load(listFromHash(), true));
-  $("#listPick").onclick = e => {
+  on("#listPick", "onclick", e => {
     const v = e.target.dataset.v;
     if (!v || v === state.list) return;
     location.hash = v === LISTS[0] ? "" : v;
     load(v, true);
-  };
+  });
 }
 
 const LISTS = ["qgis-developer", "qgis-user"];
@@ -603,7 +607,11 @@ function load(list, keepRange) {
   return fetch(`data/${list}.json`)
     .then(r => r.json())
     .then(d => { boot(d, keepRange); wire(); })
-    .catch(e => { $("#subtitle").textContent = `Could not load ${list} data — ${e.message}`; });
+    .catch(e => {
+      $("#subtitle").textContent = `Could not show ${list} — ${e.message}. ` +
+        `If this persists, reload the page (the site may have just been updated).`;
+      console.error(e);
+    });
 }
 
 $("#theme").onclick = () => {
