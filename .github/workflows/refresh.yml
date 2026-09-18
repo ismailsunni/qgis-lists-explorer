@@ -1,0 +1,26 @@
+name: Refresh archive data
+
+on:
+  schedule:
+    - cron: "17 4 2 * *"   # the 2nd of each month, once the previous month has closed
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: ./scripts/update.sh
+      - name: Commit refreshed data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          git diff --cached --quiet || git commit -m "chore: refresh archive data ($(date -u +%Y-%m-%d))"
+          git push

@@ -1,0 +1,100 @@
+# QGIS mailing list explorer
+
+An interactive view of twenty years of the two QGIS mailing lists —
+[qgis-developer](https://lists.osgeo.org/pipermail/qgis-developer/) and
+[qgis-user](https://lists.osgeo.org/pipermail/qgis-user/): activity trends, the
+people behind the traffic, the threads that ran longest, and the rhythm of a
+distributed project's working week. Switch lists with the toggle in the header.
+
+**→ [ismailsunni.id/qgis-lists-explorer](https://ismailsunni.id/qgis-lists-explorer/)**
+
+|  | qgis-developer | qgis-user |
+|---|---|---|
+| Messages | 68,529 | 56,473 |
+| Threads | 16,897 | 16,416 |
+| People | 2,044 | 4,873 |
+| Span | 2006–2026 | 2008–2026 |
+
+## What it shows
+
+| Section | Question it answers |
+|---|---|
+| Activity over time | How has list traffic changed? (drag to filter everything else) |
+| Most active people | Who writes the most, in any period you pick? |
+| When people write | Which weekday/hour does the project actually work? |
+| Contributor table | Sortable, searchable per-person stats with a per-year sparkline |
+| Threads | Which discussions drew the most replies, and which never died? |
+| Sender domains | Share of traffic by the domain people write from |
+| Newcomers and regulars | Is the community renewing itself? |
+
+## Privacy
+
+The archives are public, but that is not a reason to make personal data *more*
+accessible than the source does. So:
+
+- **No email addresses are published.** `docs/data/*.json` contains display names
+  and the *domain* people write from, never an address — not even in the
+  obfuscated `user at domain.com` form the archive itself uses. Addresses exist
+  only in the local `raw/` mirror, which is gitignored, and are discarded after
+  the identity merge.
+- An address that a sender used *as* their display name is reduced to its local
+  part, so no address leaks in through the back door.
+- Display names and subject lines are reproduced as the archive publishes them.
+- The page is marked `noindex`, because the OSGeo archive pages are
+  (`<meta name="robots" content="noindex,follow">`): this tool should not make
+  anyone easier to find by name than the source does. Remove that meta tag only
+  if you decide otherwise on purpose.
+- Anyone who would rather not appear can [open an issue](https://github.com/ismailsunni/qgis-lists-explorer/issues/new)
+  and be removed.
+
+The aggregate counts are statistics about a public technical forum, which is the
+kind of processing GDPR Recital 162 and Art. 89 treat favourably — but that rests
+on the data staying aggregated and proportionate, so keep it that way if you fork
+this.
+
+## How it works
+
+`scripts/parse.py <list>` reads the monthly pipermail mbox archives from
+`raw/<list>/` and writes one aggregated `docs/data/<list>.json`. The page is
+static HTML/CSS/JS with hand-rolled SVG charts — no build step, no dependencies,
+no tracking, no analytics.
+
+Four parsing details worth knowing:
+
+- **Dates.** Messages from before February 2008 have a `Date:` header clobbered by
+  a list migration, so the envelope line is used when the header disagrees with the
+  archive month.
+- **Identity.** Addresses are the primary key, but addresses sharing the same full
+  display name are merged into one person — several long-time contributors changed
+  employer (and address) over the years. The table shows `+N` when a person's
+  merged addresses span more than one domain.
+- **Threads** are rebuilt from `References`/`In-Reply-To`, falling back to
+  normalised subjects within a 90-day window. Subjects with no content of their own
+  ("(no subject)", one-word stubs) are excluded from that fallback, or they collect
+  unrelated mail into one huge fake thread.
+- **Bots.** A sender is flagged automated by the address it *mostly* posts from, so
+  a human who once forwarded a Dropbox notification is still a human.
+
+## Updating the data
+
+```sh
+./scripts/update.sh                 # both lists
+./scripts/update.sh qgis-user       # just one
+```
+
+Closed months are never re-fetched. A GitHub Action runs the same script on the
+2nd of each month and commits the result; GitHub Pages serves `docs/` directly, so
+a refreshed JSON is all a new deploy needs.
+
+## Local preview
+
+```sh
+python3 -m http.server -d docs 8000
+```
+
+## Caveats
+
+Counts are "messages that reached the list", which is not the same as
+contribution — much QGIS development moved to GitHub after ~2020, which the
+traffic curve shows plainly. Sender domains say where mail comes from, not who
+funds the work: free mail providers dominate both lists.
