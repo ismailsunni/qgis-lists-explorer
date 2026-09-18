@@ -27,6 +27,14 @@ distributed project's working week. Switch lists with the toggle in the header.
 | Sender domains | Share of traffic by the domain people write from |
 | Newcomers and regulars | Is the community renewing itself? |
 
+The activity chart carries project milestones. Release dates (1.0 Kore, 2.0
+Dufour, 3.0 Girona, 4.0 Norrköping) come from qgis.org; the infrastructure
+markers — the first git workflow thread, the Trac→Redmine migration, the
+"last call for switching to github issue tracker" — are dated from this archive
+itself, and each tooltip says which. The PSC's founding is deliberately absent:
+it was already active when the archive opens in 2006 and no date could be
+sourced.
+
 ## Privacy
 
 The archives are public, but that is not a reason to make personal data *more*

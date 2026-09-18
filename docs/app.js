@@ -7,8 +7,21 @@ const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const SEQ_LIGHT = ["#e8f1fd","#cde2fb","#9ec5f4","#6da7ec","#3987e5","#2a78d6","#1c5cab","#104281"];
 const SEQ_DARK  = ["#14243b","#16304f","#184f95","#1c5cab","#2a78d6","#3987e5","#6da7ec","#9ec5f4"];
 
+/* Project milestones. Release dates from qgis.org (via the QGIS Wikipedia
+   article); the "list" entries are dated from this archive itself — the thread
+   where the change was announced — and say so in their tooltip. */
+const MILESTONES = [
+  { m: "2010-12", l: "git",    t: "\"Contributing to QGIS using git\" — the first git workflow thread on this list" },
+  { m: "2011-05", l: "Redmine", t: "Trac → Redmine bug tracker migration announced here" },
+  { m: "2018-01", l: "issues", t: "\"Last call for switching to github issue tracker\"" },
+  { m: "2009-01", l: "1.0", t: "QGIS 1.0 “Kore” released, 5 January 2009", rel: 1 },
+  { m: "2013-09", l: "2.0", t: "QGIS 2.0 “Dufour” released, 8 September 2013", rel: 1 },
+  { m: "2018-02", l: "3.0", t: "QGIS 3.0 “Girona” released, 23 February 2018", rel: 1 },
+  { m: "2026-03", l: "4.0", t: "QGIS 4.0 “Norrköping” released, 6 March 2026", rel: 1 },
+];
+
 let D, state = { list: "qgis-developer", y0: 0, y1: 0, metric: "n", tab: "top",
-                 sort: "n", desc: true, q: "", hideBots: false, limit: 25, tlimit: 20 };
+                 sort: "n", desc: true, q: "", hideBots: false, marks: true, limit: 25, tlimit: 20 };
 
 const el = (tag, attrs = {}, kids = []) => {
   const e = document.createElementNS(NS, tag);
@@ -120,6 +133,29 @@ function renderTimeline() {
     }
   });
   svg.appendChild(el("line", { x1: P.l, x2: W - P.r, y1: y(0), y2: y(0), stroke: "var(--axis)" }));
+
+  if (state.marks) {
+    const lanes = [];
+    for (const ms of MILESTONES) {
+      const i = data.findIndex(d => d.m === ms.m);
+      if (i < 0) continue;
+      const mx = x(i);
+      // stack labels into free lanes so near-simultaneous events stay legible
+      let lane = 0;
+      while (lanes[lane] != null && mx - lanes[lane] < 58) lane++;
+      lanes[lane] = mx;
+      const ly = P.t + 4 + lane * 13;
+      svg.appendChild(el("line", { x1: mx, x2: mx, y1: ly, y2: P.t + ih,
+        stroke: "var(--axis)", "stroke-width": 1 }));
+      const flip = mx > W - P.r - 46;   // keep the last label inside the plot
+      svg.appendChild(text(mx + (flip ? -4 : 4), ly + 4, ms.l,
+        { fill: ms.rel ? "var(--ink-2)" : "var(--muted)", "font-size": 10.5,
+          "font-weight": ms.rel ? 600 : 400, "text-anchor": flip ? "end" : "start" }));
+      const hit = el("rect", { x: mx - 7, y: P.t, width: 14, height: ih, fill: "transparent" });
+      hit.addEventListener("pointermove", e => { e.stopPropagation(); showTip(e, `<b>${ms.l}</b> · ${ms.m}<br>${ms.t}`); });
+      svg.appendChild(hit);
+    }
+  }
 
   const cross = el("line", { y1: P.t, y2: P.t + ih, stroke: "var(--axis)", "stroke-width": 1, opacity: 0 });
   const dot = el("circle", { r: 4, fill: "var(--s1)", stroke: "var(--surface)", "stroke-width": 2, opacity: 0 });
@@ -445,6 +481,7 @@ function boot(data, keepRange) {
   $("#peopleMore").onclick = () => { state.limit += 50; renderPeopleTable(); };
   $("#threadMore").onclick = () => { state.tlimit += 40; renderThreadTable(); };
   $("#bots").onchange = e => { state.hideBots = e.target.checked; state.limit = 25; renderAll(); };
+  $("#marks").onchange = e => { state.marks = e.target.checked; renderTimeline(); };
   $("#app").hidden = false;
   renderAll();
 }
