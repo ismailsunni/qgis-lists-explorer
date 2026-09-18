@@ -52,6 +52,9 @@ const hideTip = () => { tip.hidden = true; };
 
 const inRange = y => y >= state.y0 && y <= state.y1;
 const people = () => D.authors.filter(a => !(state.hideBots && a.bot));
+/** Aggregates come in two prebuilt variants so the bot toggle moves every
+    chart, not just the people list. */
+const V = () => D[state.hideBots ? "humans" : "all"];
 
 /** Round axis ticks to 1/2/5 x 10^n so labels read as numbers, not noise. */
 function niceTicks(max, count = 4) {
@@ -67,7 +70,7 @@ const sumYears = (obj) => {
 
 /* ---------------------------------------------------------- stat tiles */
 function renderTiles() {
-  const yrs = D.yearly.filter(y => inRange(y.y));
+  const yrs = V().yearly.filter(y => inRange(y.y));
   const msgs = yrs.reduce((a, y) => a + y.n, 0);
   const threads = yrs.reduce((a, y) => a + y.threads, 0);
   const peak = yrs.slice().sort((a, b) => b.n - a.n)[0];
@@ -86,7 +89,7 @@ function renderTiles() {
 function renderTimeline() {
   const host = $("#timeline"), H = 250, P = { t: 12, r: 12, b: 26, l: 44 };
   const [svg, W] = root(host, H);
-  const data = D.monthly, key = state.metric;
+  const data = V().monthly, key = state.metric;
   const iw = W - P.l - P.r, ih = H - P.t - P.b;
   const ticks = niceTicks(Math.max(...data.map(d => d[key])));
   const max = ticks.at(-1);
@@ -139,21 +142,36 @@ function renderTimeline() {
     for (const ms of MILESTONES) {
       const i = data.findIndex(d => d.m === ms.m);
       if (i < 0) continue;
-      const mx = x(i);
-      // stack labels into free lanes so near-simultaneous events stay legible
+      const mx = x(i), w = ms.l.length * 6.2 + 14, h = 17;
       let lane = 0;
-      while (lanes[lane] != null && mx - lanes[lane] < 58) lane++;
+      while (lanes[lane] != null && mx - lanes[lane] < w + 8) lane++;
       lanes[lane] = mx;
-      const ly = P.t + 4 + lane * 13;
-      svg.appendChild(el("line", { x1: mx, x2: mx, y1: ly, y2: P.t + ih,
+      const fy = P.t + 2 + lane * (h + 3);
+      const flip = mx + w > W - P.r;          // hang the flag left near the edge
+      const fx = flip ? mx - w : mx;
+      const g = el("g", { cursor: "help" });
+      g.appendChild(el("line", { x1: mx, x2: mx, y1: fy, y2: P.t + ih,
         stroke: "var(--axis)", "stroke-width": 1 }));
-      const flip = mx > W - P.r - 46;   // keep the last label inside the plot
-      svg.appendChild(text(mx + (flip ? -4 : 4), ly + 4, ms.l,
-        { fill: ms.rel ? "var(--ink-2)" : "var(--muted)", "font-size": 10.5,
-          "font-weight": ms.rel ? 600 : 400, "text-anchor": flip ? "end" : "start" }));
-      const hit = el("rect", { x: mx - 7, y: P.t, width: 14, height: ih, fill: "transparent" });
-      hit.addEventListener("pointermove", e => { e.stopPropagation(); showTip(e, `<b>${ms.l}</b> · ${ms.m}<br>${ms.t}`); });
-      svg.appendChild(hit);
+      g.appendChild(el("path", {
+        // a pennant: square against the pole, notched at the free end
+        d: flip
+          ? `M${mx},${fy}H${fx + 5}l-5,${h / 2}l5,${h / 2}H${mx}Z`
+          : `M${mx},${fy}H${fx + w - 5}l5,${h / 2}l-5,${h / 2}H${mx}Z`,
+        fill: ms.rel ? "var(--s1)" : "var(--surface)",
+        "fill-opacity": ms.rel ? .92 : 1,
+        stroke: ms.rel ? "none" : "var(--axis)", "stroke-width": 1,
+      }));
+      g.appendChild(text(fx + (flip ? 9 : 6), fy + h / 2 + 4, ms.l,
+        { fill: ms.rel ? "#fff" : "var(--ink-2)", "font-size": 11,
+          "font-weight": ms.rel ? 600 : 400 }));
+      g.appendChild(el("rect", { x: fx - 3, y: fy - 3, width: w + 6, height: h + 6, fill: "transparent" }));
+      g.addEventListener("pointermove", e => {
+        e.stopPropagation();
+        showTip(e, `<b>${ms.l}</b> · ${ms.m}<br>${ms.t}<br>
+          <span class="k">${ms.rel ? "Release date from qgis.org" : "Dated from this archive"}</span>`);
+      });
+      g.addEventListener("pointerleave", hideTip);
+      svg.appendChild(g);
     }
   }
 
@@ -233,9 +251,9 @@ function renderPeopleChart() {
 function renderHeatmap() {
   const host = $("#heatmap");
   const grid = Array.from({ length: 7 }, () => Array(24).fill(0));
-  for (const y in D.heatmapByYear) {
+  for (const y in V().heatmapByYear) {
     if (!inRange(+y)) continue;
-    D.heatmapByYear[y].forEach((row, d) => row.forEach((v, h) => { grid[d][h] += v; }));
+    V().heatmapByYear[y].forEach((row, d) => row.forEach((v, h) => { grid[d][h] += v; }));
   }
   const H = 196, P = { t: 14, r: 8, l: 34, b: 26 };
   const [svg, W] = root(host, H);
@@ -271,7 +289,7 @@ function renderHeatmap() {
 function renderOrgs() {
   const host = $("#orgs");
   const years = D.years.filter(inRange);
-  const tot = D.domains.map(d => ({ ...d, sum: sumYears(d.years) })).filter(d => d.sum);
+  const tot = V().domains.map(d => ({ ...d, sum: sumYears(d.years) })).filter(d => d.sum);
   tot.sort((a, b) => b.sum - a.sum);
   const top = tot.slice(0, 7), rest = tot.slice(7);
   const series = [...top.map((d, i) => ({ name: d.d, color: `var(--s${i + 1})`, d })),
@@ -285,7 +303,7 @@ function renderOrgs() {
   const y = v => P.t + ih - ih * v;
 
   const share = years.map(yr => {
-    const all = D.yearly.find(a => a.y === yr).n || 1;
+    const all = V().yearly.find(a => a.y === yr).n || 1;
     const vals = series.map(s => s.d ? (s.d.years[yr] || 0) / all
       : rest.reduce((a, d) => a + (d.years[yr] || 0), 0) / all);
     return vals;
@@ -324,7 +342,7 @@ function renderOrgs() {
 /* ----------------------------------------------------- churn (bars) */
 function renderChurn() {
   const host = $("#churn");
-  const years = D.yearly.filter(y => inRange(y.y));
+  const years = V().yearly.filter(y => inRange(y.y));
   const H = 230, P = { t: 10, r: 10, l: 34, b: 26 };
   const [svg, W] = root(host, H);
   const iw = W - P.l - P.r, ih = H - P.t - P.b;
@@ -409,7 +427,7 @@ function renderPeopleTable() {
 const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 function renderThreadTable() {
-  const src = state.tab === "top" ? D.topThreads : D.longestThreads;
+  const src = state.tab === "top" ? V().topThreads : V().longestThreads;
   const all = src.filter(t => inRange(+t.start.slice(0, 4)));
   const rows = all.slice(0, state.tlimit);
   const head = `<thead><tr><th class="l">Thread</th><th class="l">Started by</th>
@@ -435,7 +453,7 @@ function setRange(a, b) {
 
 function renderAll() {
   state.limit = Math.max(25, state.limit);
-  const yrs = D.yearly.filter(y => inRange(y.y));
+  const yrs = V().yearly.filter(y => inRange(y.y));
   $("#rangeNote").textContent =
     `${fmt(yrs.reduce((a, y) => a + y.n, 0))} messages in ${state.y1 - state.y0 + 1} year${state.y1 > state.y0 ? "s" : ""}`;
   renderTiles(); renderTimeline(); renderPeopleChart(); renderHeatmap();

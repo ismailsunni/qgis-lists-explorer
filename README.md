@@ -81,7 +81,11 @@ Four parsing details worth knowing:
   ("(no subject)", one-word stubs) are excluded from that fallback, or they collect
   unrelated mail into one huge fake thread.
 - **Bots.** A sender is flagged automated by the address it *mostly* posts from, so
-  a human who once forwarded a Dropbox notification is still a human.
+  a human who once forwarded a Dropbox notification is still a human. Every
+  aggregate is built twice, with and without them (`all` / `humans` in the JSON),
+  so "hide automated senders" moves the charts too, not just the people list —
+  on qgis-developer it removes 3,810 messages and 1,621 threads, most of them
+  plugin-approval notifications.
 
 ## Updating the data
 

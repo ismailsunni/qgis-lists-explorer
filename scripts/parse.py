@@ -180,47 +180,21 @@ def main():
     for m in msgs:
         threads[uf.find(m["mid"])].append(m)
 
-    # ---- aggregates ----
-    monthly = Counter(); monthly_people = defaultdict(set); monthly_threads = defaultdict(set)
-    hourly = Counter()  # (weekday, hour)
-    hourly_year = defaultdict(Counter)
+    # ---- people ----
     authors = {}
-    domains_year = defaultdict(Counter)
     for m in msgs:
-        key = m["ts"].strftime("%Y-%m")
-        monthly[key] += 1
-        monthly_people[key].add(m["pid"])
-        monthly_threads[key].add(uf.find(m["mid"]))
-        hourly[(m["ts"].weekday(), m["ts"].hour)] += 1
-        hourly_year[m["ts"].year][(m["ts"].weekday(), m["ts"].hour)] += 1
-        y = m["ts"].year
-        dom = m["email"].split("@")[-1]
-        domains_year[dom][y] += 1
         a = authors.setdefault(m["pid"], dict(emails=Counter(), names=Counter(), n=0,
-                                                years=Counter(), first=m["ts"], last=m["ts"],
-                                                started=0, threads=set()))
+                                              years=Counter(), first=m["ts"], last=m["ts"],
+                                              started=0, threads=set()))
         a["names"][m["name"]] += 1
         a["emails"][m["email"]] += 1
         a["n"] += 1
-        a["years"][y] += 1
+        a["years"][m["ts"].year] += 1
         a["last"] = m["ts"]
         a["threads"].add(uf.find(m["mid"]))
-
-    thread_list = []
-    for root, ms in threads.items():
+    for ms in threads.values():
         ms.sort(key=lambda x: x["ts"])
-        starter = ms[0]
-        authors[starter["pid"]]["started"] += 1
-        thread_list.append(dict(
-            subject=norm_subject(starter["subj"]) or "(no subject)",
-            n=len(ms),
-            people=len({x["pid"] for x in ms}),
-            start=ms[0]["ts"].strftime("%Y-%m-%d"),
-            end=ms[-1]["ts"].strftime("%Y-%m-%d"),
-            days=(ms[-1]["ts"] - ms[0]["ts"]).days,
-            starter=public_name(authors[starter["pid"]]["names"].most_common(1)[0][0]),
-            url=f"{LIST_URL}/{starter['archive']}/thread.html",
-        ))
+        authors[ms[0]["pid"]]["started"] += 1
 
     BOT_LOCAL = re.compile(r"^(noreply|no-reply|do-?not-?reply|jenkins|travis|mailman|"
                            r"bounces|postmaster|root|notifications?|automation)\b")
@@ -229,55 +203,83 @@ def main():
         a dropbox notification forwarded is not a bot."""
         return bool(BOT_LOCAL.match(email.split("@")[0])) or email.split("@")[-1].endswith("github.com")
 
-    threads_started = Counter(t["start"][:4] for t in thread_list)
-
-    # first appearance per person -> newcomers/year
-    newcomers = Counter()
-    for a in authors.values():
-        newcomers[a["first"].year] += 1
-
+    bot_pids = {p for p, a in authors.items() if is_bot(a["emails"].most_common(1)[0][0])}
+    name_of = {p: public_name(a["names"].most_common(1)[0][0]) for p, a in authors.items()}
     years = sorted({m["ts"].year for m in msgs})
-    # yearly retention: people active in year Y who were also active in Y-1
-    active_by_year = defaultdict(set)
-    for m in msgs:
-        active_by_year[m["ts"].year].add(m["pid"])
 
-    top_authors = sorted(authors.values(), key=lambda a: -a["n"])
+    def view(sel):
+        """Every aggregate, recomputed over whichever messages are in play — so
+        hiding automated senders moves the charts, not just the people count."""
+        monthly = Counter()
+        m_people, m_threads = defaultdict(set), defaultdict(set)
+        hourly_year, domains_year = defaultdict(Counter), defaultdict(Counter)
+        active, first_year = defaultdict(set), {}
+        grouped = defaultdict(list)
+        for m in sel:
+            y, key, root = m["ts"].year, m["ts"].strftime("%Y-%m"), uf.find(m["mid"])
+            monthly[key] += 1
+            m_people[key].add(m["pid"])
+            m_threads[key].add(root)
+            hourly_year[y][(m["ts"].weekday(), m["ts"].hour)] += 1
+            domains_year[m["email"].split("@")[-1]][y] += 1
+            active[y].add(m["pid"])
+            first_year[m["pid"]] = min(first_year.get(m["pid"], y), y)
+            grouped[root].append(m)
+
+        thread_list = []
+        for ms in grouped.values():
+            starter = ms[0]
+            thread_list.append(dict(
+                subject=norm_subject(starter["subj"]) or "(no subject)",
+                n=len(ms),
+                people=len({x["pid"] for x in ms}),
+                start=ms[0]["ts"].strftime("%Y-%m-%d"),
+                end=ms[-1]["ts"].strftime("%Y-%m-%d"),
+                days=(ms[-1]["ts"] - ms[0]["ts"]).days,
+                starter=name_of[starter["pid"]],
+                url=f"{LIST_URL}/{starter['archive']}/thread.html",
+            ))
+        started = Counter(t["start"][:4] for t in thread_list)
+        newcomers = Counter(first_year.values())
+
+        return dict(
+            monthly=[dict(m=k, n=monthly[k], p=len(m_people[k]), t=len(m_threads[k]))
+                     for k in sorted(monthly)],
+            yearly=[dict(y=y, n=sum(v for k, v in monthly.items() if k.startswith(str(y))),
+                         threads=started[str(y)], people=len(active[y]),
+                         newcomers=newcomers[y], returning=len(active[y] & active[y - 1]))
+                    for y in years],
+            topThreads=sorted(thread_list, key=lambda t: -t["n"])[:400],
+            longestThreads=sorted([t for t in thread_list if t["n"] >= 5],
+                                  key=lambda t: -t["days"])[:400],
+            heatmapByYear={str(y): [[c[(d, h)] for h in range(24)] for d in range(7)]
+                           for y, c in hourly_year.items()},
+            domains=[dict(d=d, n=sum(c.values()), years={str(k): v for k, v in sorted(c.items())})
+                     for d, c in sorted(domains_year.items(), key=lambda kv: -sum(kv[1].values()))[:60]],
+        )
+
     out = dict(
         meta=dict(
             generated=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
             list=LIST, listUrl=LIST_URL,
             messages=len(msgs), threads=len(threads), people=len(authors),
+            bots=len(bot_pids),
             first=msgs[0]["ts"].strftime("%Y-%m-%d"), last=msgs[-1]["ts"].strftime("%Y-%m-%d"),
             archives=len(files),
         ),
-        monthly=[dict(m=k, n=monthly[k], p=len(monthly_people[k]), t=len(monthly_threads[k]))
-                 for k in sorted(monthly)],
         years=years,
-        yearly=[dict(y=y, n=sum(v for k, v in monthly.items() if k.startswith(str(y))),
-                     threads=threads_started[str(y)],
-                     people=len(active_by_year[y]), newcomers=newcomers[y],
-                     returning=len(active_by_year[y] & active_by_year[y - 1]))
-                for y in years],
         # Addresses are deliberately NOT published: only the domain, which is
         # what the analysis actually needs. See README > Privacy.
-        authors=[dict(name=public_name(a["names"].most_common(1)[0][0]),
+        authors=[dict(name=name_of[p],
                       domain=a["emails"].most_common(1)[0][0].split("@")[-1],
                       domains=len({e.split("@")[-1] for e in a["emails"]}),
-                      bot=is_bot(a["emails"].most_common(1)[0][0]) or None, n=a["n"],
+                      bot=(p in bot_pids) or None, n=a["n"],
                       started=a["started"], threads=len(a["threads"]),
                       first=a["first"].strftime("%Y-%m"), last=a["last"].strftime("%Y-%m"),
                       years={str(k): v for k, v in sorted(a["years"].items())})
-                 for a in top_authors],
-        topThreads=sorted(thread_list, key=lambda t: -t["n"])[:400],
-        longestThreads=sorted([t for t in thread_list if t["n"] >= 5],
-                              key=lambda t: -t["days"])[:400],
-        heatmap=[[hourly[(d, h)] for h in range(24)] for d in range(7)],
-        heatmapByYear={str(y): [[c[(d, h)] for h in range(24)] for d in range(7)]
-                       for y, c in hourly_year.items()},
-        domains=[dict(d=d, n=sum(c.values()), years={str(k): v for k, v in sorted(c.items())})
-                 for d, c in sorted(domains_year.items(), key=lambda kv: -sum(kv[1].values()))[:60]],
-        threadSizeDist=sorted(Counter(min(t["n"], 50) for t in thread_list).items()),
+                 for p, a in sorted(authors.items(), key=lambda kv: -kv[1]["n"])],
+        all=view(msgs),
+        humans=view([m for m in msgs if m["pid"] not in bot_pids]),
     )
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w") as f:
