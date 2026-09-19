@@ -33,6 +33,7 @@ each list alone shows half of it). The thread table gains a List column there.
 | Messages per person | How lopsided is participation? |
 | Contributor table | Sortable, searchable per-person stats, time span, per-year sparkline |
 | Who talks with whom | Co-participation graph: who shares threads with whom |
+| What they talk about | Topic mix per year, and a topic filter on the thread table |
 | Threads | Which discussions drew the most replies, and which never died? (sort any column) |
 | Sender domains | Share of traffic by the domain people write from |
 | Newcomers and regulars | Is the community renewing itself? |
@@ -91,6 +92,15 @@ Four parsing details worth knowing:
   display name are merged into one person — several long-time contributors changed
   employer (and address) over the years. The table shows `+N` when a person's
   merged addresses span more than one domain.
+- **Topics** come from a keyword taxonomy in `parse.py` — an ordered list of
+  regexes matched against each thread's subject, first match wins, with
+  cross-cutting rules (platforms, releases, bugs) deliberately last so that "crash
+  on Windows" files as a bug rather than an install question. The rules were
+  derived from the most frequent subject terms in these archives and are meant to
+  be read and disagreed with; there is no model involved. About 82% of threads
+  match something and the remaining 18% are shown as "unclassified" rather than
+  quietly dropped. The heatmap normalises per year, so a quiet year still shows
+  its mix.
 - **The graph** joins two people when they appear in the same thread. It covers the
   80 most active people per list, keeps the 4,000 strongest pairs, and stores a
   per-year count for each, so the period filter and the bot toggle drive it like

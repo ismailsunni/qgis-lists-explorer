@@ -22,7 +22,7 @@ const MILESTONES = [
 
 let D, state = { list: "qgis-developer", y0: 0, y1: 0, metric: "n", tab: "top",
                  peopleSort: { k: "n", desc: true }, threadSort: { k: "n", desc: true },
-                 q: "", hideBots: false, marks: true, minEdge: 5, limit: 25, tlimit: 20 };
+                 q: "", topic: "", hideBots: false, marks: true, minEdge: 5, limit: 25, tlimit: 20 };
 
 /** A bar whose data-end is rounded and whose baseline end is square. */
 const barPath = (x, y, w, h, r = 4) => {
@@ -575,6 +575,53 @@ function renderGraph() {
   });
 }
 
+/* -------------------------------------------------- what they talk about */
+function renderTopics() {
+  const host = $("#topics");
+  const years = D.years.filter(inRange);
+  const rows = V().topics
+    .map(t => ({ ...t, sum: sumYears(t.years) }))
+    .filter(t => t.sum > 0)
+    .sort((a, b) => b.sum - a.sum);
+  if (!rows.length || !years.length) return host.replaceChildren();
+
+  const P = { t: 22, r: 62, l: 168, b: 8 }, rh = 17;
+  const H = P.t + rows.length * rh + P.b;
+  const [svg, W] = root(host, H);
+  const cw = (W - P.l - P.r) / years.length;
+  // share of that year's threads, so a quiet year still shows its mix
+  const byYear = Object.fromEntries(years.map(y =>
+    [y, rows.reduce((a, t) => a + (t.years[y] || 0), 0) || 1]));
+  const ramp = dark() ? SEQ_DARK : SEQ_LIGHT;
+  const max = Math.max(...rows.flatMap(t => years.map(y => (t.years[y] || 0) / byYear[y])));
+
+  years.forEach((y, i) => {
+    if (years.length <= 14 || y % 2 === 0)
+      svg.appendChild(text(P.l + i * cw + cw / 2, P.t - 7,
+        cw >= 34 ? y : String(y).slice(2), { "text-anchor": "middle" }));
+  });
+  rows.forEach((t, r) => {
+    const y0 = P.t + r * rh;
+    svg.appendChild(text(P.l - 9, y0 + rh / 2 + 4, t.t,
+      { "text-anchor": "end", fill: t.t === "unclassified" ? "var(--muted)" : "var(--ink-2)", "font-size": 11.5 }));
+    years.forEach((y, i) => {
+      const n = t.years[y] || 0, share = n / byYear[y];
+      const cell = el("rect", { x: P.l + i * cw + 1, y: y0 + 1,
+        width: Math.max(1, cw - 2), height: rh - 2, rx: 2,
+        fill: n === 0 ? "var(--grid)" : ramp[Math.min(ramp.length - 1, Math.floor((share / max) ** .6 * ramp.length))] });
+      cell.addEventListener("pointermove", e => showTip(e,
+        `<b>${t.t}</b> · ${y}<br>${fmt(n)} thread${n === 1 ? "" : "s"}
+         <span class="k">(${(share * 100).toFixed(1)}% of that year)</span>`));
+      cell.addEventListener("pointerleave", hideTip);
+      svg.appendChild(cell);
+    });
+    svg.appendChild(text(W - P.r + 8, y0 + rh / 2 + 4, fmt(t.sum), { "font-size": 11 }));
+  });
+  host.insertAdjacentHTML("beforeend",
+    `<div class="legend scale"><span>smaller</span>${ramp.map(c =>
+      `<i style="background:${c}"></i>`).join("")}<span>bigger share of the year's threads</span></div>`);
+}
+
 /* ----------------------------------------------------------- tables */
 function spark(years) {
   const vals = D.years.map(y => years[y] || 0), max = Math.max(1, ...vals);
@@ -642,6 +689,7 @@ function renderThreadTable() {
   const cols = [
     ["subject", "Thread", t => `<a href="${t.url}" target="_blank" rel="noopener">${esc(t.subject)}</a>`, "l subj"],
     ["starter", "Started by", t => esc(t.starter), "l dim"],
+    ["topic", "Topic", t => `<span class="${t.topic === "unclassified" ? "dim" : ""}">${esc(t.topic)}</span>`, "l"],
     ...(state.list === "all"
       ? [["list", "List", t => t.list.replace("qgis-", ""), "l dim"]] : []),
     ["n", "Messages", t => fmt(t.n), "num"],
@@ -650,7 +698,8 @@ function renderThreadTable() {
     ["start", "Started", t => t.start, "l num dim"],
   ];
   const st = state.threadSort;
-  const all = V().threads.filter(t => inRange(+t.start.slice(0, 4)));
+  const all = V().threads.filter(t => inRange(+t.start.slice(0, 4))
+    && (!state.topic || t.topic === state.topic));
   all.sort((a, b) => {
     const [x, y] = [a[st.k], b[st.k]];
     const c = typeof x === "string" ? x.localeCompare(y) : x - y;
@@ -733,7 +782,8 @@ function renderAll() {
   $("#rangeNote").textContent =
     `${fmt(yrs.reduce((a, y) => a + y.n, 0))} messages in ${state.y1 - state.y0 + 1} year${state.y1 > state.y0 ? "s" : ""}`;
   renderTiles(); renderTimeline(); renderPeopleChart(); renderHistogram(); renderHeatmap();
-  renderOrgs(); renderChurn(); renderGraph(); renderPeopleTable(); renderThreadTable();
+  renderOrgs(); renderChurn(); renderGraph(); renderTopics();
+  renderPeopleTable(); renderThreadTable();
 }
 
 function boot(data, keepRange) {
@@ -772,6 +822,12 @@ function boot(data, keepRange) {
   on("#search", "oninput", e => { state.q = e.target.value.trim(); state.limit = 25; renderPeopleTable(); });
   on("#peopleMore", "onclick", () => { state.limit += 50; renderPeopleTable(); });
   on("#threadMore", "onclick", () => { state.tlimit += 40; renderThreadTable(); });
+  const tp = $("#topicPick");
+  if (tp) {
+    tp.innerHTML = `<option value="">All topics</option>` + V().topics
+      .map(t => `<option${t.t === state.topic ? " selected" : ""}>${esc(t.t)}</option>`).join("");
+    tp.onchange = e => { state.topic = e.target.value; state.tlimit = 20; renderThreadTable(); };
+  }
   on("#bots", "onchange", e => { state.hideBots = e.target.checked; state.limit = 25; renderAll(); });
   on("#marks", "onchange", e => { state.marks = e.target.checked; renderTimeline(); });
   on("#minEdge", "oninput", e => {

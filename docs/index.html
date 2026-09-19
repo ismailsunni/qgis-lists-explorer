@@ -9,7 +9,7 @@
      from them, so it keeps the source's posture. See README > Privacy. -->
 <meta name="robots" content="noindex, follow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📬</text></svg>">
-<link rel="stylesheet" href="style.css?v=992db719cb">
+<link rel="stylesheet" href="style.css?v=8599df7ae9">
 </head>
 <body>
 <header class="top">
@@ -107,6 +107,16 @@
   </section>
 
   <section class="card">
+    <div class="card-head"><div>
+      <h2>What they talk about</h2>
+      <p class="hint">Each thread is filed by keywords in its subject line — a plain rule list,
+        not a model, and about a sixth of threads match nothing. Colour is that topic's share of
+        the year's threads, so a quiet year still shows its mix.</p>
+    </div></div>
+    <div class="chart" id="topics"></div>
+  </section>
+
+  <section class="card">
     <div class="card-head">
       <div>
         <h2>Threads</h2>
@@ -114,6 +124,7 @@
           references and falling back to normalised subjects. Click a column to sort; titles link
           to the monthly archive.</p>
       </div>
+      <select id="topicPick" aria-label="Filter threads by topic"></select>
     </div>
     <div class="scroll"><table id="threadTable" class="data"></table></div>
     <button class="more" id="threadMore" hidden></button>
@@ -155,6 +166,6 @@
 
 <div id="tip" class="tip" hidden></div>
 <script src="vendor/d3-force.min.js?v=af6c6bf81a"></script>
-<script src="app.js?v=0febcd71bd"></script>
+<script src="app.js?v=c1eac3952f"></script>
 </body>
 </html>

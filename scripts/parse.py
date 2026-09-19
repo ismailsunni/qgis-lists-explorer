@@ -54,6 +54,75 @@ def public_name(name):
     out = ADDR_ANY.sub(lambda m: re.split(r"@|\s+at\s+", m.group(0))[0], name or "").strip()
     return re.sub(r"\s+", " ", out).strip(" ()<>,;:-") or "(unnamed)"
 
+
+# ---------------------------------------------------------------- topics
+# A transparent keyword taxonomy: the first pattern matching a thread's subject
+# wins, so specific rules sit above cross-cutting ones (a crash report that
+# mentions Windows is a bug, not an install question). The rules were built from
+# the most frequent subject terms in these archives and are meant to be read and
+# argued with — there is no model here. Roughly 82% of threads match something;
+# the rest stay "unclassified" and the page says so.
+TOPICS = [
+    ("List admin & digests", r"\bdigest\b|unsubscrib|subscrib|out of office|auto.?reply|automatic reply|"
+                             r"moderat|mailman|delivery status|undeliver|vacation"),
+    ("Governance & funding", r"\bpsc\b|steering|\bvote|voting|ballot|election|nomination|\bagenda\b|minutes\b|"
+                             r"budget|financial|\bgrant\b|sponsor|donation|funding|treasur|\bboard\b|motion|"
+                             r"\bqep\b|trademark|foundation|membership|charter|by-?laws|certification|"
+                             r"code of conduct|\bmeeting\b"),
+    ("Community & events", r"\bgsoc\b|google summer|hackfest|foss4g|conference|user ?group|meetup|"
+                           r"code ?sprint|mentor|contributor|welcome|introduc(e|tion)|survey\b|newsletter"),
+    ("Docs & translation", r"documentation|\bdocs?\b|manual|tutorial|handbook|translat|transifex|i18n|l10n|"
+                           r"localis|localiz|glossar|\btypo\b|screenshot"),
+    ("Infrastructure", r"github|gitlab|\bgit\b|\bsvn\b|redmine|\btrac\b|issue ?tracker|bug ?tracker|jenkins|"
+                       r"travis|\bci\b|continuous integration|mailing ?list|website|web ?site|qgis\.org|"
+                       r"\bwiki\b|infrastructur|migration|hosting|\bdns\b|certificat|unit ?test|\btests?\b|"
+                       r"test ?suite|\bqa\b|code ?review|pull ?request|\bpr\b\s|commit"),
+    ("Releases & roadmap", r"release|freeze|\bltr\b|\brc\d?\b|backport|changelog|roadmap|milestone|"
+                           r"what will be in|\bfreeze\b|feature ?freeze|release ?plan"),
+    ("Install & platforms", r"install|osgeo4w|homebrew|\bdeb\b|debian|ubuntu|fedora|flatpak|\bsnap\b|nightly|"
+                            r"\bbuild|cmake|compil|\bmakefile\b|dependenc|packag|windows|\bmac\b|macos|\bos ?x\b|"
+                            r"linux|android|\bios\b|download|binary|portable|\bpath\b|startup|launch"),
+    ("Plugins", r"plugin|repositor(y|ies) (approval|upload)|approval notification"),
+    ("Processing & analysis", r"processing|sextante|algorithm|toolbox|\bgrass\b|\bsaga\b|\botb\b|geoprocess|"
+                              r"model(l)?er|\bbatch\b|statistic|interpolat|raster calc|zonal|buffer|intersect|"
+                              r"dissolve|overlay|network analys|classification|clip\b"),
+    ("Python & API", r"python|pyqgis|\bapi\b|\bsip\b|binding|script|console|\bqt\d?\b|\bpyqt\b|\bc\+\+\b|"
+                     r"signal|refactor|deprecat|\bcode\b|\bclass\b|\bmethod\b"),
+    ("Web, server & basemaps", r"qgis[- ]?server|\bwms\b|\bwfs\b|\bwcs\b|\bwmts\b|\bows\b|web ?client|mapserver|"
+                               r"geoserver|lizmap|\bproxy\b|tile|\bxyz\b|openlayers|google|bing|\bosm\b|"
+                               r"openstreetmap|basemap|\bweb\b|online"),
+    ("Data & formats", r"postgis|postgres|oracle|spatialite|geopackage|\bgpkg\b|shapefile|\bshp\b|\bgdal\b|"
+                       r"\bogr\b|\bcsv\b|\bdxf\b|\bdwg\b|\becw\b|mrsid|geotiff|\bnetcdf\b|\bsqlite\b|\bmssql\b|"
+                       r"db ?manager|data ?provider|\blidar\b|point ?cloud|\bmesh\b|database|\bsql\b|import|export"),
+    ("Layers & rasters", r"\braster|\bvector\b|\blayers?\b|map ?canvas|\bcanvas\b|legend|project ?file|\bqgs\b|"
+                         r"\bqgz\b|load(ing)? |\bmap\b|georeferenc|\bdem\b|\bwarp\b|mosaic|\btiff?\b|band\b"),
+    ("Attributes & forms", r"attribute|\bform\b|\bfield\b|\btable\b|field ?calculator|expression|\bwidget\b|"
+                           r"\bjoin\b|relation|\bfilter\b|\bquery\b|value ?map|\bnull\b"),
+    ("CRS & projections", r"\bcrs\b|projection|reproject|\bepsg\b|\bproj4?\b|datum|transformation|"
+                          r"coordinate ?system|on.the.fly|\butm\b|\bwgs ?84\b|coordinates?\b"),
+    ("Symbology & rendering", r"symbol|styl(e|ing)|\bsld\b|\blabel|render|blend|categoriz|graduated|"
+                              r"colou?r|\bsvg\b|marker|opacity|transparen|\bsplash\b|\bicon\b|\btheme\b"),
+    ("Layouts & printing", r"composer|layout|atlas|print|\bpdf\b|\bdpi\b|scale ?bar|north ?arrow|export image"),
+    ("Editing & geometry", r"digiti[sz]|editing|\bsnap(ping)?\b|topolog|geometr|vertex|vertice|node tool|"
+                           r"split feature|merge feature|\bpolygon|\bline(s)?\b|\bpoints?\b|\bfeatures?\b|"
+                           r"\bselect(ion)?\b|\barea\b|\blength\b"),
+    ("GPS & field data", r"\bgps\b|\bgpx\b|garmin|field ?data|tracker|waypoint|\bnmea\b"),
+    ("Bugs & performance", r"crash|segfault|segmentation|freez|hang|broken|regression|\bbug\b|traceback|"
+                           r"does ?n.?t work|not working|fail(s|ed|ure)?\b|\bslow\b|performance|memory|"
+                           r"optimi[sz]|benchmark|leak\b"),
+    ("UI & usability", r"\bui\b|\bgui\b|dialog|toolbar|\bmenu\b|shortcut|usability|user ?interface|"
+                       r"\bpanel\b|\bbrowser\b|drag ?and ?drop|\bzoom\b|\bpan\b"),
+]
+ORDER = ['List admin & digests', 'Governance & funding', 'Community & events', 'Docs & translation', 'Plugins', 'Infrastructure', 'Processing & analysis', 'Python & API', 'Web, server & basemaps', 'Data & formats', 'CRS & projections', 'Symbology & rendering', 'Layouts & printing', 'Attributes & forms', 'Editing & geometry', 'GPS & field data', 'Layers & rasters', 'Bugs & performance', 'Releases & roadmap', 'Install & platforms', 'UI & usability']
+TOPICS = sorted(TOPICS, key=lambda t: ORDER.index(t[0]))
+TOPICS = [(n, re.compile(p, re.I)) for n, p in TOPICS]
+def classify(s):
+    for n, p in TOPICS:
+        if p.search(s):
+            return n
+    return "unclassified"
+
+
 class UF:
     def __init__(self): self.p = {}
     def find(self, x):
@@ -265,8 +334,12 @@ def main():
             grouped[root].append(m)
 
         thread_list = []
+        topic_year, topic_msgs = defaultdict(Counter), Counter()
         for ms in grouped.values():
             starter = ms[0]
+            topic = classify(norm_subject(starter["subj"]))
+            topic_year[topic][starter["ts"].year] += 1
+            topic_msgs[topic] += len(ms)
             thread_list.append(dict(
                 subject=norm_subject(starter["subj"]) or "(no subject)",
                 n=len(ms),
@@ -275,6 +348,7 @@ def main():
                 end=ms[-1]["ts"].strftime("%Y-%m-%d"),
                 days=(ms[-1]["ts"] - ms[0]["ts"]).days,
                 starter=name_of[starter["pid"]],
+                topic=topic,
                 list=starter["src"],
                 url=f"{PIPERMAIL}/{starter['src']}/{starter['archive']}/thread.html",
             ))
@@ -308,6 +382,9 @@ def main():
                 edges=[[a, b, dict(ys)] for (a, b), ys in
                        sorted(edges.items(), key=lambda kv: -sum(kv[1].values()))[:GRAPH_EDGES]],
             ),
+            topics=[dict(t=t, n=sum(c.values()), msgs=topic_msgs[t],
+                         years={str(k): v for k, v in sorted(c.items())})
+                    for t, c in sorted(topic_year.items(), key=lambda kv: -sum(kv[1].values()))],
             monthly=[dict(m=k, n=monthly[k], p=len(m_people[k]), t=len(m_threads[k]))
                      for k in sorted(monthly)],
             yearly=[dict(y=y, n=sum(v for k, v in monthly.items() if k.startswith(str(y))),
