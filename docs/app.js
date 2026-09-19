@@ -574,6 +574,8 @@ function renderThreadTable() {
   const cols = [
     ["subject", "Thread", t => `<a href="${t.url}" target="_blank" rel="noopener">${esc(t.subject)}</a>`, "l subj"],
     ["starter", "Started by", t => esc(t.starter), "l dim"],
+    ...(state.list === "all"
+      ? [["list", "List", t => t.list.replace("qgis-", ""), "l dim"]] : []),
     ["n", "Messages", t => fmt(t.n), "num"],
     ["people", "People", t => fmt(t.people), "num"],
     ["days", "Ran for", t => t.days === 0 ? "same day" : fmt(t.days) + " days", "num"],
@@ -674,8 +676,12 @@ function boot(data, keepRange) {
     `${fmt(D.meta.messages)} messages · ${fmt(D.meta.threads)} threads · ${fmt(D.meta.people)} people · ${D.meta.first} to ${D.meta.last}`;
   $("#gen").textContent = `Data generated ${D.meta.generated}.`;
   $("#srcLink").href = D.meta.listUrl + "/";
-  $("#srcLink").textContent = `lists.osgeo.org/pipermail/${D.meta.list}`;
-  document.title = `${D.meta.list} — QGIS mailing list explorer`;
+  const srcs = D.meta.sources || [D.meta.list];
+  $("#srcLink").textContent = srcs.length > 1
+    ? `the ${srcs.length} QGIS lists (${srcs.join(", ")})`
+    : `lists.osgeo.org/pipermail/${D.meta.list}`;
+  document.title = (D.meta.list === "all" ? "all lists" : D.meta.list) +
+    " — QGIS mailing list explorer";
   for (const id of ["y0", "y1"]) {
     $("#" + id).innerHTML = D.years.map(y => `<option>${y}</option>`).join("");
     $("#" + id).value = state[id];
@@ -722,7 +728,7 @@ function wire() {
   });
 }
 
-const LISTS = ["qgis-developer", "qgis-user", "qgis-psc"];
+const LISTS = ["qgis-developer", "qgis-user", "qgis-psc", "all"];
 const listFromHash = () => LISTS.includes(location.hash.slice(1)) ? location.hash.slice(1) : LISTS[0];
 
 function load(list, keepRange) {

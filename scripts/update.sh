@@ -27,4 +27,7 @@ for LIST in "${LISTS[@]}"; do
   python3 scripts/parse.py "$LIST"
 done
 
+# the merged dataset is rebuilt whenever any single list is
+python3 scripts/parse.py all
+
 python3 scripts/stamp.py

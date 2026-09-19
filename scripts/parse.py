@@ -10,10 +10,16 @@ from datetime import datetime, timezone
 from email.header import decode_header, make_header
 from email.utils import parsedate_to_datetime, parseaddr
 
+PIPERMAIL = "https://lists.osgeo.org/pipermail"
+ALL_LISTS = ["qgis-developer", "qgis-user", "qgis-psc"]
+
 LIST = sys.argv[1] if len(sys.argv) > 1 else "qgis-developer"
-RAW = f"raw/{LIST}"
+# "all" merges the lists into one dataset: identities and threads are unified
+# across them, so a person on two lists is one person and a cross-posted
+# discussion is one thread.
+SOURCES = ALL_LISTS if LIST == "all" else [LIST]
 OUT = f"docs/data/{LIST}.json"
-LIST_URL = f"https://lists.osgeo.org/pipermail/{LIST}"
+LIST_URL = PIPERMAIL if LIST == "all" else f"{PIPERMAIL}/{LIST}"
 GRAPH_NODES = 80     # people in the co-participation graph
 GRAPH_EDGES = 4000   # strongest pairs kept
 
@@ -92,13 +98,15 @@ def envelope_date(line):
 month_name = "January February March April May June July August September October November December".split()
 
 def main():
-    files = sorted(f for f in os.listdir(RAW) if f.endswith(".txt") or f.endswith(".txt.gz"))
+    files = [(src, f) for src in SOURCES
+             for f in sorted(os.listdir(f"raw/{src}"))
+             if f.endswith(".txt") or f.endswith(".txt.gz")]
     msgs = []
-    for fn in files:
+    for src, fn in files:
         stem = fn.replace(".txt.gz", "").replace(".txt", "")
         arch_year, arch_month = stem.split("-")
         arch_ym = (int(arch_year), month_name.index(arch_month) + 1)
-        for env, m in iter_messages(os.path.join(RAW, fn)):
+        for env, m in iter_messages(os.path.join(f"raw/{src}", fn)):
             frm = dec(m.get("From", ""))
             # pipermail rewrites From as: "user at domain.com (Display Name)".
             # The name itself may contain brackets, so take the FIRST "(".
@@ -132,7 +140,7 @@ def main():
             mid = mid.group(1) if mid else f"synthetic-{len(msgs)}"
             refs = MSGID.findall((m.get("References", "") or "") + " " + (m.get("In-Reply-To", "") or ""))
             msgs.append(dict(mid=mid, refs=refs, name=name, email=email_addr,
-                             subj=dec(m.get("Subject", "")), ts=dt, archive=stem))
+                             subj=dec(m.get("Subject", "")), ts=dt, archive=stem, src=src))
     msgs.sort(key=lambda x: x["ts"])
 
     # ---- identity: one person may post from several addresses ----
@@ -154,7 +162,8 @@ def main():
                 by_name[nn] = em
     for m in msgs:
         m["pid"] = ident.find(m["email"])
-    print(f"parsed {len(msgs)} messages from {len(files)} archives", file=sys.stderr)
+    print(f"parsed {len(msgs)} messages from {len(files)} archives "
+          f"({', '.join(SOURCES)})", file=sys.stderr)
 
     # ---- threading: union-find on references, fallback to normalised subject ----
     uf = UF()
@@ -248,7 +257,8 @@ def main():
                 end=ms[-1]["ts"].strftime("%Y-%m-%d"),
                 days=(ms[-1]["ts"] - ms[0]["ts"]).days,
                 starter=name_of[starter["pid"]],
-                url=f"{LIST_URL}/{starter['archive']}/thread.html",
+                list=starter["src"],
+                url=f"{PIPERMAIL}/{starter['src']}/{starter['archive']}/thread.html",
             ))
         # ---- co-participation graph ----
         # Who shares threads with whom, among the people who write most. Edges
@@ -300,7 +310,7 @@ def main():
     out = dict(
         meta=dict(
             generated=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-            list=LIST, listUrl=LIST_URL,
+            list=LIST, listUrl=LIST_URL, sources=SOURCES,
             messages=len(msgs), threads=len(threads), people=len(authors),
             bots=len(bot_pids),
             first=msgs[0]["ts"].strftime("%Y-%m-%d"), last=msgs[-1]["ts"].strftime("%Y-%m-%d"),

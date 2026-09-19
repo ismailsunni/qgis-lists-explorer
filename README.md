@@ -4,18 +4,24 @@ An interactive view of twenty years of the QGIS mailing lists —
 [qgis-developer](https://lists.osgeo.org/pipermail/qgis-developer/),
 [qgis-user](https://lists.osgeo.org/pipermail/qgis-user/) and
 [qgis-psc](https://lists.osgeo.org/pipermail/qgis-psc/), the Project Steering
-Committee's list: activity trends, the people behind the traffic, who works with
+Committee's list — plus an **all** view that merges the three: activity trends, the people behind the traffic, who works with
 whom, the threads that ran longest, and the rhythm of a distributed project's
 working week. Switch lists with the toggle in the header.
 
 **→ [ismailsunni.id/qgis-lists-explorer](https://ismailsunni.id/qgis-lists-explorer/)**
 
-|  | qgis-developer | qgis-user | qgis-psc |
-|---|---|---|---|
-| Messages | 68,529 | 56,473 | 10,835 |
-| Threads | 16,895 | 16,415 | 1,747 |
-| People | 2,044 | 4,873 | 166 |
-| Span | 2006–2026 | 2008–2026 | 2008–2026 |
+|  | qgis-developer | qgis-user | qgis-psc | all |
+|---|---|---|---|---|
+| Messages | 68,529 | 56,473 | 10,835 | 135,837 |
+| Threads | 16,895 | 16,415 | 1,747 | 33,355 |
+| People | 2,044 | 4,873 | 166 | 6,234 |
+| Span | 2006–2026 | 2008–2026 | 2008–2026 | 2006–2026 |
+
+**all** is a real merge, not a sum: `parse.py all` reads the three archives
+together, so identity merging and threading run across them. 849 people write on
+more than one list and become one person; ~1,700 cross-posted discussions become
+one thread (the "Logo" debate is 156 messages across psc and developer, where
+each list alone shows half of it). The thread table gains a List column there.
 
 ## What it shows
 
