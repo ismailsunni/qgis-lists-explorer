@@ -81,6 +81,9 @@ analytics, and no third-party requests at runtime. The one dependency is d3-forc
 
 Four parsing details worth knowing:
 
+- **One time axis.** The timeline spans every list's archives (2006-03 to now),
+  not just the current one's, so switching lists moves the data without moving
+  the axis under it. A list simply starts where it starts.
 - **Dates.** Messages from before February 2008 have a `Date:` header clobbered by
   a list migration, so the envelope line is used when the header disagrees with the
   archive month.

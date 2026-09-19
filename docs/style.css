@@ -41,8 +41,18 @@ a { color: inherit; text-decoration-color: var(--axis); text-underline-offset: 2
 a:hover { text-decoration-color: currentColor; }
 .wrap { max-width: 1140px; margin: 0 auto; padding: 0 16px; }
 
-.top { border-bottom: 1px solid var(--border); background: var(--surface); padding-top: env(safe-area-inset-top, 0px); }
-.top-inner { display: flex; align-items: flex-start; gap: 16px; justify-content: space-between; padding-block: 22px; }
+.top {
+  position: sticky; top: 0; z-index: 8;
+  border-bottom: 1px solid var(--border); background: var(--surface);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.top-inner { display: flex; align-items: center; gap: 16px; justify-content: space-between; padding-block: 12px; }
+h1 { font-size: 18px; }
+.sub { font-size: 12.5px; }
+@media (max-width: 560px) {
+  .top-inner { flex-wrap: wrap; padding-block: 10px; }
+  .sub { display: none; }
+}
 h1 { font-size: 21px; margin: 0; font-weight: 640; letter-spacing: -.01em; }
 h1 span { color: var(--ink-2); font-weight: 400; }
 .sub { margin: 4px 0 0; color: var(--ink-2); }

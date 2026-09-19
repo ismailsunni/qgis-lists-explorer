@@ -97,6 +97,24 @@ def envelope_date(line):
 
 month_name = "January February March April May June July August September October November December".split()
 
+def archive_span():
+    """Earliest and latest archive month across every list, so each dataset can
+    draw its timeline on one shared axis instead of its own."""
+    stems = []
+    for src in ALL_LISTS:
+        d = f"raw/{src}"
+        if not os.path.isdir(d):
+            continue
+        for f in os.listdir(d):
+            if f.endswith(".txt") or f.endswith(".txt.gz"):
+                y, mn = f.replace(".txt.gz", "").replace(".txt", "").split("-")
+                stems.append((int(y), month_name.index(mn) + 1))
+    if not stems:
+        return None
+    lo, hi = min(stems), max(stems)
+    return dict(first=f"{lo[0]}-{lo[1]:02d}", last=f"{hi[0]}-{hi[1]:02d}")
+
+
 def main():
     files = [(src, f) for src in SOURCES
              for f in sorted(os.listdir(f"raw/{src}"))
@@ -310,7 +328,7 @@ def main():
     out = dict(
         meta=dict(
             generated=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-            list=LIST, listUrl=LIST_URL, sources=SOURCES,
+            list=LIST, listUrl=LIST_URL, sources=SOURCES, span=archive_span(),
             messages=len(msgs), threads=len(threads), people=len(authors),
             bots=len(bot_pids),
             first=msgs[0]["ts"].strftime("%Y-%m-%d"), last=msgs[-1]["ts"].strftime("%Y-%m-%d"),

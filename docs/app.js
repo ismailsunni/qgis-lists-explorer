@@ -101,50 +101,71 @@ function renderTiles() {
 }
 
 /* ----------------------------------------------------------- timeline */
+/** Every month between two "YYYY-MM" bounds, inclusive. */
+function monthRange(a, b) {
+  const out = [];
+  let [y, m] = a.split("-").map(Number);
+  const [ey, em] = b.split("-").map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    if (++m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
 function renderTimeline() {
   const host = $("#timeline"), H = 250, P = { t: 12, r: 12, b: 26, l: 44 };
   const [svg, W] = root(host, H);
-  const data = V().monthly, key = state.metric;
+  const series = V().monthly, key = state.metric;
+  // The axis spans every list's archives, not just this one's, so switching
+  // lists moves the data and leaves the time axis where it was.
+  const span = D.meta.span || { first: series[0].m, last: series.at(-1).m };
+  const months = monthRange(
+    series[0].m < span.first ? series[0].m : span.first,
+    series.at(-1).m > span.last ? series.at(-1).m : span.last);
+  const slot = new Map(months.map((m, i) => [m, i]));
+  const pts = series.map(d => ({ ...d, i: slot.get(d.m) })).filter(d => d.i != null);
+
   const iw = W - P.l - P.r, ih = H - P.t - P.b;
-  const ticks = niceTicks(Math.max(...data.map(d => d[key])));
+  const ticks = niceTicks(Math.max(...pts.map(d => d[key])));
   const max = ticks.at(-1);
-  const x = i => P.l + (iw * i) / (data.length - 1);
+  const x = i => P.l + (iw * i) / (months.length - 1);
   const y = v => P.t + ih - (ih * v) / max;
   for (const v of ticks) {
     svg.appendChild(el("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), stroke: "var(--grid)", "stroke-width": 1 }));
     svg.appendChild(text(P.l - 8, y(v) + 4, fmt(v), { "text-anchor": "end" }));
   }
 
-  const area = data.map((d, i) => `${i ? "L" : "M"}${x(i)},${y(d[key])}`).join("") +
-    `L${x(data.length - 1)},${y(0)}L${x(0)},${y(0)}Z`;
-  svg.appendChild(el("path", { d: area, fill: "var(--s1)", "fill-opacity": .16 }));
+  const line = pts.map((d, j) => `${j ? "L" : "M"}${x(d.i)},${y(d[key])}`).join("");
   svg.appendChild(el("path", {
-    d: data.map((d, i) => `${i ? "L" : "M"}${x(i)},${y(d[key])}`).join(""),
-    fill: "none", stroke: "var(--s1)", "stroke-opacity": .45, "stroke-width": 1,
+    d: line + `L${x(pts.at(-1).i)},${y(0)}L${x(pts[0].i)},${y(0)}Z`,
+    fill: "var(--s1)", "fill-opacity": .16,
   }));
+  svg.appendChild(el("path", { d: line, fill: "none", stroke: "var(--s1)", "stroke-opacity": .45, "stroke-width": 1 }));
 
-  const roll = data.map((_, i) => {
-    const s = Math.max(0, i - 11), w = data.slice(s, i + 1);
+  const roll = pts.map((_, j) => {
+    const w = pts.slice(Math.max(0, j - 11), j + 1);
     return w.reduce((a, d) => a + d[key], 0) / w.length;
   });
   svg.appendChild(el("path", {
-    d: roll.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(""),
+    d: roll.map((v, j) => `${j ? "L" : "M"}${x(pts[j].i)},${y(v)}`).join(""),
     fill: "none", stroke: "var(--s1)", "stroke-width": 2, "stroke-linejoin": "round",
   }));
 
   // dim everything outside the selected period
-  const first = data.findIndex(d => +d.m.slice(0, 4) >= state.y0);
-  let last = data.length - 1;
-  while (last > 0 && +data[last].m.slice(0, 4) > state.y1) last--;
+  const inSel = m => { const yr = +m.slice(0, 4); return yr >= state.y0 && yr <= state.y1; };
+  const firstSel = months.findIndex(inSel);
+  let lastSel = months.length - 1;
+  while (lastSel > 0 && !inSel(months[lastSel])) lastSel--;
   const dim = (x1, x2) => x2 > x1 && svg.appendChild(el("rect", {
     x: x1, y: P.t, width: x2 - x1, height: ih, fill: "var(--surface)", "fill-opacity": .66,
   }));
-  dim(P.l, x(Math.max(0, first)));
-  dim(x(last), W - P.r);
+  dim(P.l, x(Math.max(0, firstSel)));
+  dim(x(lastSel), W - P.r);
 
   let prevYear = null;
-  data.forEach((d, i) => {
-    const yr = +d.m.slice(0, 4);
+  months.forEach((m, i) => {
+    const yr = +m.slice(0, 4);
     if (yr !== prevYear && yr % 2 === 0) {
       svg.appendChild(text(x(i), H - 8, yr, { "text-anchor": "middle" }));
       prevYear = yr;
@@ -155,8 +176,8 @@ function renderTimeline() {
   if (state.marks) {
     const lanes = [];
     for (const ms of MILESTONES) {
-      const i = data.findIndex(d => d.m === ms.m);
-      if (i < 0) continue;
+      const i = slot.get(ms.m);
+      if (i == null) continue;
       const mx = x(i), w = ms.l.length * 6.2 + 14, h = 17;
       let lane = 0;
       while (lanes[lane] != null && mx - lanes[lane] < w + 8) lane++;
@@ -168,7 +189,6 @@ function renderTimeline() {
       g.appendChild(el("line", { x1: mx, x2: mx, y1: fy, y2: P.t + ih,
         stroke: "var(--axis)", "stroke-width": 1 }));
       g.appendChild(el("path", {
-        // a pennant: square against the pole, notched at the free end
         d: flip
           ? `M${mx},${fy}H${fx + 5}l-5,${h / 2}l5,${h / 2}H${mx}Z`
           : `M${mx},${fy}H${fx + w - 5}l5,${h / 2}l-5,${h / 2}H${mx}Z`,
@@ -195,20 +215,23 @@ function renderTimeline() {
   const sel = el("rect", { y: P.t, height: ih, fill: "var(--s1)", "fill-opacity": .14, opacity: 0 });
   svg.append(sel, cross, dot);
 
-  const label = { n: "messages", p: "people", t: "threads" }[key];
-  const idxAt = e => {
+  const slotAt = e => {
     const r = svg.getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * W;
-    return Math.max(0, Math.min(data.length - 1, Math.round(((px - P.l) / iw) * (data.length - 1))));
+    return Math.max(0, Math.min(months.length - 1, Math.round(((px - P.l) / iw) * (months.length - 1))));
   };
+  // nearest month that actually has data, so the readout never lies about a gap
+  const nearest = i => pts.reduce((best, d) =>
+    Math.abs(d.i - i) < Math.abs(best.i - i) ? d : best, pts[0]);
+
   let anchor = null;
   svg.addEventListener("pointermove", e => {
-    const i = idxAt(e), d = data[i];
-    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
-    dot.setAttribute("cx", x(i)); dot.setAttribute("cy", y(d[key])); dot.setAttribute("opacity", 1);
+    const gi = slotAt(e), d = nearest(gi);
+    cross.setAttribute("x1", x(d.i)); cross.setAttribute("x2", x(d.i)); cross.setAttribute("opacity", 1);
+    dot.setAttribute("cx", x(d.i)); dot.setAttribute("cy", y(d[key])); dot.setAttribute("opacity", 1);
     if (anchor !== null) {
-      sel.setAttribute("x", Math.min(x(anchor), x(i)));
-      sel.setAttribute("width", Math.abs(x(i) - x(anchor)));
+      sel.setAttribute("x", Math.min(x(anchor), x(gi)));
+      sel.setAttribute("width", Math.abs(x(gi) - x(anchor)));
       sel.setAttribute("opacity", 1);
     }
     const [yy, mm] = d.m.split("-");
@@ -218,18 +241,17 @@ function renderTimeline() {
   svg.addEventListener("pointerleave", () => {
     cross.setAttribute("opacity", 0); dot.setAttribute("opacity", 0); hideTip();
   });
-  svg.addEventListener("pointerdown", e => { anchor = idxAt(e); svg.setPointerCapture(e.pointerId); });
+  svg.addEventListener("pointerdown", e => { anchor = slotAt(e); svg.setPointerCapture(e.pointerId); });
   svg.addEventListener("pointerup", e => {
     if (anchor === null) return;
-    const i = idxAt(e);
+    const gi = slotAt(e);
     sel.setAttribute("opacity", 0);
-    if (Math.abs(i - anchor) > 1) {
-      const a = +data[Math.min(anchor, i)].m.slice(0, 4), b = +data[Math.max(anchor, i)].m.slice(0, 4);
-      setRange(a, b);
-    }
+    if (Math.abs(gi - anchor) > 1)
+      setRange(+months[Math.min(anchor, gi)].slice(0, 4), +months[Math.max(anchor, gi)].slice(0, 4));
     anchor = null;
   });
-  svg.appendChild(el("title", {}, [document.createTextNode(`Monthly ${label} on qgis-developer`)]));
+  const label = { n: "messages", p: "people", t: "threads" }[key];
+  svg.appendChild(el("title", {}, [document.createTextNode(`Monthly ${label} on ${D.meta.list}`)]));
 }
 
 /* ------------------------------------------------------ people (bars) */
@@ -680,7 +702,10 @@ function renderHistogram() {
     svg.appendChild(r);
     svg.appendChild(text(bx + w / 2, y(b.people) - 6, fmt(b.people),
       { "text-anchor": "middle", fill: "var(--ink-2)", "font-size": 11 }));
-    svg.appendChild(text(bx + w / 2, H - P.b + 16, bucketLabel([b.lo, b.hi]), { "text-anchor": "middle" }));
+    // full ranges need room; when the bars get narrow, show the lower bound only
+    svg.appendChild(text(bx + w / 2, H - P.b + 16,
+      bw < 52 ? (b.hi === Infinity ? b.lo + "+" : b.lo) : bucketLabel([b.lo, b.hi]),
+      { "text-anchor": "middle" }));
   });
   svg.appendChild(el("line", { x1: P.l, x2: W - P.r, y1: y(0), y2: y(0), stroke: "var(--axis)" }));
   svg.appendChild(text(P.l, H - 6, "messages sent by one person", { "font-size": 11 }));
