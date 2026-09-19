@@ -103,6 +103,10 @@ h2 { font-size: 15px; margin: 0; font-weight: 620; }
 .legend.scale span:last-child { margin-left: 2px; }
 .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
 
+.graph-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ghost.wide { width: auto; padding: 0 12px; height: 30px; font-size: 12.5px; }
+#graph svg { touch-action: none; }
+
 input[type="range"] { width: 130px; accent-color: var(--s1); }
 
 .note { margin: 10px 0 0; color: var(--ink-2); font-size: 12.5px; }

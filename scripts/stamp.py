@@ -11,9 +11,9 @@ docs = pathlib.Path(__file__).resolve().parent.parent / "docs"
 index = docs / "index.html"
 html = index.read_text()
 
-for asset, attr in (("app.js", "src"), ("style.css", "href")):
+for asset, attr in (("app.js", "src"), ("style.css", "href"), ("vendor/d3-force.min.js", "src")):
     h = hashlib.sha256((docs / asset).read_bytes()).hexdigest()[:10]
     html = re.sub(rf'{attr}="{re.escape(asset)}(?:\?v=[0-9a-f]+)?"', f'{attr}="{asset}?v={h}"', html)
 
 index.write_text(html)
-print("stamped", *re.findall(r'(?:src|href)="(?:app\.js|style\.css)\?v=[0-9a-f]+"', html))
+print("stamped", *re.findall(r'(?:src|href)="(?:app\.js|style\.css|vendor/d3-force\.min\.js)\?v=[0-9a-f]+"', html))

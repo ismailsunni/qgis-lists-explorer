@@ -74,8 +74,10 @@ this.
 
 `scripts/parse.py <list>` reads the monthly pipermail mbox archives from
 `raw/<list>/` and writes one aggregated `docs/data/<list>.json`. The page is
-static HTML/CSS/JS with hand-rolled SVG charts — no build step, no dependencies,
-no tracking, no analytics.
+static HTML/CSS/JS with hand-rolled SVG charts — no build step, no tracking, no
+analytics, and no third-party requests at runtime. The one dependency is d3-force
+(with d3-selection and d3-drag), vendored into `docs/vendor/d3-force.min.js` at
+35 KB and rebuilt by `scripts/vendor-d3.sh`.
 
 Four parsing details worth knowing:
 
@@ -89,8 +91,10 @@ Four parsing details worth knowing:
 - **The graph** joins two people when they appear in the same thread. It covers the
   80 most active people per list, keeps the 4,000 strongest pairs, and stores a
   per-year count for each, so the period filter and the bot toggle drive it like
-  everything else. The layout is a deterministic force simulation — the same data
-  always settles the same way, so filtering does not reshuffle the picture.
+  everything else. The layout is a live [d3-force](https://d3js.org/d3-force)
+  simulation: drag a node to pin it, double-click to release, scroll to zoom,
+  drag the background to pan, Reset to unpin everything and re-run. Nodes start
+  from a fixed spiral, so the same data settles the same way each time.
 - **The thread table** sorts on any column, over a pool of the 400 largest threads
   plus the 300 longest-running — so a sort is "within the notable threads", not
   across all 16,000.

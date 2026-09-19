@@ -388,122 +388,168 @@ function renderChurn() {
 }
 
 /* ------------------------------------------------ who talks with whom */
-/** Deterministic force layout: same data always lands the same way, so the
-    picture does not jump when a filter changes. */
-function layout(nodes, edges, W, H, iters = 320) {
-  const n = nodes.length, k = Math.sqrt((W * H) / Math.max(1, n)) * 0.62;
-  const pos = nodes.map((_, i) => {
-    const a = (i * 2.399963) % (Math.PI * 2), r = (0.25 + 0.75 * (i / n)) * Math.min(W, H) * 0.45;
-    return { x: W / 2 + Math.cos(a) * r, y: H / 2 + Math.sin(a) * r };
-  });
-  const maxW = Math.max(1, ...edges.map(e => e.w));
-  for (let it = 0; it < iters; it++) {
-    const t = (1 - it / iters) ** 1.5 * (Math.min(W, H) / 12) + 0.4;
-    const dx = new Float64Array(n), dy = new Float64Array(n);
-    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
-      let ex = pos[i].x - pos[j].x, ey = pos[i].y - pos[j].y;
-      let d2 = ex * ex + ey * ey || 0.01;
-      const f = (k * k) / d2;
-      dx[i] += ex * f; dy[i] += ey * f; dx[j] -= ex * f; dy[j] -= ey * f;
-    }
-    for (const e of edges) {
-      const ex = pos[e.a].x - pos[e.b].x, ey = pos[e.a].y - pos[e.b].y;
-      const d = Math.sqrt(ex * ex + ey * ey) || 0.01;
-      const f = (d / k) * (0.25 + 0.75 * (e.w / maxW));
-      dx[e.a] -= ex / d * f * k * 0.5; dy[e.a] -= ey / d * f * k * 0.5;
-      dx[e.b] += ex / d * f * k * 0.5; dy[e.b] += ey / d * f * k * 0.5;
-    }
-    for (let i = 0; i < n; i++) {
-      const d = Math.hypot(dx[i], dy[i]) || 1, s = Math.min(d, t) / d;
-      pos[i].x += dx[i] * s - (pos[i].x - W / 2) * 0.012;
-      pos[i].y += dy[i] * s - (pos[i].y - H / 2) * 0.012;
-    }
-  }
-  return pos;
-}
+let sim = null;   // the running simulation, so a re-render can stop the old one
 
 function renderGraph() {
   const host = $("#graph"), g = V().graph;
   if (!g) return;
-  const pad = 26, H = Math.max(360, Math.min(520, host.clientWidth * 0.46));
+  if (sim) { sim.stop(); sim = null; }
+  const H = Math.max(360, Math.min(560, host.clientWidth * 0.5));
   const [svg, W] = root(host, H);
   const sum = o => { let t = 0; for (const y in o) if (inRange(+y)) t += o[y]; return t; };
 
   const size = g.nodes.map(n => sum(n.years));
   const minW = state.minEdge;
-  let edges = g.edges.map(([a, b, ys]) => ({ a, b, w: sum(ys) }))
+  const raw = g.edges.map(([a, b, ys]) => ({ a, b, w: sum(ys) }))
     .filter(e => e.w >= minW && size[e.a] > 0 && size[e.b] > 0);
-  const keep = new Set(edges.flatMap(e => [e.a, e.b]));
-  const ids = [...keep].sort((a, b) => size[b] - size[a]);
+  const ids = [...new Set(raw.flatMap(e => [e.a, e.b]))].sort((a, b) => size[b] - size[a]);
   const at = new Map(ids.map((id, i) => [id, i]));
-  const nodes = ids.map(id => ({ ...g.nodes[id], n: size[id] }));
-  edges = edges.map(e => ({ a: at.get(e.a), b: at.get(e.b), w: e.w }));
 
-  $("#graphNote").innerHTML = nodes.length
-    ? `<b>${fmt(nodes.length)}</b> of the ${g.nodes.length} most active people share
-       <b>${fmt(edges.length)}</b> connections of ${minW}+ thread${minW > 1 ? "s" : ""} in this period.`
+  $("#graphNote").innerHTML = ids.length
+    ? `<b>${fmt(ids.length)}</b> of the ${g.nodes.length} most active people share
+       <b>${fmt(raw.length)}</b> connections of ${minW}+ thread${minW > 1 ? "s" : ""} in this period.
+       <span class="k">Drag a node to pin it, double-click to release, scroll to zoom.</span>`
     : "No pair shares that many threads in this period — lower the threshold.";
-  if (!nodes.length) return;
+  if (!ids.length) return;
 
-  const pos = layout(nodes, edges, W - pad * 2, H - pad * 2);
-  const xs = pos.map(p => p.x), ys = pos.map(p => p.y);
-  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  // A force layout settles into a blob; stretch it to fill a wide card, but cap
-  // the stretch so distances stay roughly honest.
-  const sy = (H - pad * 2) / Math.max(1, y1 - y0), sx = (W - pad * 2) / Math.max(1, x1 - x0);
-  const s = Math.min(sx, sy), sX = Math.min(sx, s * 1.7);
-  const ox = (W - (x1 - x0) * sX) / 2, oy = (H - (y1 - y0) * s) / 2;
-  const X = i => ox + (pos[i].x - x0) * sX, Y = i => oy + (pos[i].y - y0) * s;
-
-  const maxN = Math.max(...nodes.map(n => n.n));
-  const R = i => 4 + 18 * Math.sqrt(nodes[i].n / maxN);
-  const maxW2 = Math.max(...edges.map(e => e.w));
-
-  const eg = el("g", { stroke: "var(--s1)", fill: "none" });
-  edges.forEach((e, i) => {
-    const line = el("line", { x1: X(e.a), y1: Y(e.a), x2: X(e.b), y2: Y(e.b),
-      "stroke-width": 0.6 + 3 * (e.w / maxW2), "stroke-opacity": 0.1 + 0.35 * (e.w / maxW2) });
-    line.dataset.a = e.a; line.dataset.b = e.b;
-    eg.appendChild(line);
+  const maxN = Math.max(...ids.map(i => size[i]));
+  // Seed on a spiral so every run starts from the same place and settles alike.
+  const nodes = ids.map((id, i) => {
+    const a = (i * 2.399963) % (Math.PI * 2), r = (0.2 + 0.8 * (i / ids.length)) * Math.min(W, H) * 0.42;
+    return { ...g.nodes[id], n: size[id], i, r: 4 + 18 * Math.sqrt(size[id] / maxN),
+             x: W / 2 + Math.cos(a) * r, y: H / 2 + Math.sin(a) * r };
   });
-  svg.appendChild(eg);
+  const links = raw.map(e => ({ source: at.get(e.a), target: at.get(e.b), w: e.w }));
+  const maxW = Math.max(...links.map(l => l.w));
 
+  const view = el("g");
+  const eg = el("g", { stroke: "var(--s1)" });
   const ng = el("g");
-  nodes.forEach((nd, i) => {
-    const c = el("circle", { cx: X(i), cy: Y(i), r: R(i), fill: "var(--s1)", "fill-opacity": .85,
-      stroke: "var(--surface)", "stroke-width": 2, cursor: "pointer" });
+  const lg = el("g");
+  view.append(eg, ng, lg);
+  svg.appendChild(view);
+
+  const lines = links.map(l => {
+    const ln = el("line", { "stroke-width": 0.6 + 3 * (l.w / maxW),
+      "stroke-opacity": 0.1 + 0.35 * (l.w / maxW) });
+    eg.appendChild(ln);
+    return ln;
+  });
+  const circles = nodes.map(nd => {
+    const c = el("circle", { r: nd.r, fill: "var(--s1)", "fill-opacity": .85,
+      stroke: "var(--surface)", "stroke-width": 2, cursor: "grab" });
+    ng.appendChild(c);
+    return c;
+  });
+  const labelled = nodes.slice(0, 12);
+  const labels = labelled.map(nd => {
+    const parts = nd.name.split(" ");
+    const t = text(0, 0, parts[0] + (parts[1] ? " " + parts[1][0] : ""),
+      { "text-anchor": "middle", fill: "var(--ink-2)", "font-size": 11, "paint-order": "stroke",
+        stroke: "var(--surface)", "stroke-width": 3, "pointer-events": "none" });
+    lg.appendChild(t);
+    return t;
+  });
+
+  const tick = () => {
+    lines.forEach((ln, i) => {
+      const l = links[i];
+      ln.setAttribute("x1", l.source.x); ln.setAttribute("y1", l.source.y);
+      ln.setAttribute("x2", l.target.x); ln.setAttribute("y2", l.target.y);
+    });
+    circles.forEach((c, i) => { c.setAttribute("cx", nodes[i].x); c.setAttribute("cy", nodes[i].y); });
+    // biggest node wins a contested spot; the rest hide until things move apart
+    const boxes = [];
+    labels.forEach((t, i) => {
+      const nd = labelled[i], w = t.textContent.length * 6;
+      const x = nd.x, y = nd.y - nd.r - 5;
+      const clash = boxes.some(b => Math.abs(b.x - x) < (b.w + w) / 2 + 4 && Math.abs(b.y - y) < 13);
+      if (!clash) boxes.push({ x, y, w });
+      t.setAttribute("display", clash ? "none" : "inline");
+      t.setAttribute("x", x);
+      t.setAttribute("y", y);
+    });
+  };
+
+  sim = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links).distance(l => 120 - 70 * (l.w / maxW)).strength(l => 0.06 + 0.5 * (l.w / maxW)))
+    .force("charge", d3.forceManyBody().strength(-260).distanceMax(Math.max(W, H)))
+    .force("collide", d3.forceCollide(d => d.r + 3))
+    .force("x", d3.forceX(W / 2).strength(0.045))
+    .force("y", d3.forceY(H / 2).strength(0.075))
+    .alphaDecay(0.022)
+    .on("tick", tick);
+
+  const highlight = i => lines.forEach((ln, j) => {
+    const on = i == null || links[j].source.index === i || links[j].target.index === i;
+    ln.setAttribute("stroke-opacity", i == null ? 0.1 + 0.35 * (links[j].w / maxW) : on ? .85 : .04);
+  });
+
+  circles.forEach((c, i) => {
+    const nd = nodes[i];
     c.addEventListener("pointermove", e => {
-      const mates = edges.filter(x => x.a === i || x.b === i)
+      const mates = links.filter(l => l.source.index === i || l.target.index === i)
         .sort((p, q) => q.w - p.w).slice(0, 3)
-        .map(x => `${nodes[x.a === i ? x.b : x.a].name} (${x.w})`);
+        .map(l => `${(l.source.index === i ? l.target : l.source).name} (${l.w})`);
       showTip(e, `<b>${nd.name}</b> · @${nd.domain}<br>${fmt(nd.n)} messages in ${state.y0}–${state.y1}<br>
         <span class="k">shares most threads with: ${mates.join(", ") || "—"}</span>`);
-      eg.querySelectorAll("line").forEach(l => {
-        const on = +l.dataset.a === i || +l.dataset.b === i;
-        l.setAttribute("stroke-opacity", on ? .85 : .04);
-      });
+      highlight(i);
     });
-    c.addEventListener("pointerleave", () => {
-      hideTip();
-      eg.querySelectorAll("line").forEach((l, j) =>
-        l.setAttribute("stroke-opacity", 0.1 + 0.35 * (edges[j].w / maxW2)));
+    c.addEventListener("pointerleave", () => { hideTip(); highlight(null); });
+    c.addEventListener("dblclick", () => {   // release a pinned node
+      nd.fx = nd.fy = null;
+      c.setAttribute("stroke", "var(--surface)");
+      sim.alpha(.25).restart();
     });
-    ng.appendChild(c);
+    d3.select(c).call(d3.drag()
+      .subject(() => nd)
+      .on("start", e => {
+        if (!e.active) sim.alphaTarget(.3).restart();
+        nd.fx = nd.x; nd.fy = nd.y;
+        c.setAttribute("cursor", "grabbing");
+      })
+      .on("drag", e => { nd.fx = e.x; nd.fy = e.y; })
+      .on("end", e => {
+        if (!e.active) sim.alphaTarget(0);
+        c.setAttribute("cursor", "grab");
+        c.setAttribute("stroke", "var(--ink-2)");   // stays pinned until double-clicked
+      }));
   });
-  svg.appendChild(ng);
 
-  // name the hubs; everyone else is a hover away
-  const placed = [];
-  nodes.forEach((nd, i) => {
-    if (i > 13) return;
-    const parts = nd.name.split(" ");
-    const label = parts[0] + (parts[1] ? " " + parts[1][0] : "");
-    const w = label.length * 6, cx = X(i), cy = Y(i) - R(i) - 5;
-    if (placed.some(p => Math.abs(p.x - cx) < (p.w + w) / 2 + 4 && Math.abs(p.y - cy) < 13)) return;
-    placed.push({ x: cx, y: cy, w });
-    svg.appendChild(text(cx, cy, label,
-      { "text-anchor": "middle", fill: "var(--ink-2)", "font-size": 11, "paint-order": "stroke",
-        stroke: "var(--surface)", "stroke-width": 3 }));
+  // pan and zoom, without pulling in another library
+  let z = 1, tx = 0, ty = 0;
+  const apply = () => view.setAttribute("transform", `translate(${tx},${ty}) scale(${z})`);
+  svg.addEventListener("wheel", e => {
+    e.preventDefault();
+    const r = svg.getBoundingClientRect();
+    const mx = (e.clientX - r.left) / r.width * W, my = (e.clientY - r.top) / r.height * H;
+    const f = Math.exp(-e.deltaY * 0.0016), nz = Math.max(0.4, Math.min(6, z * f));
+    tx = mx - (mx - tx) * (nz / z); ty = my - (my - ty) * (nz / z);
+    z = nz; apply();
+  }, { passive: false });
+  let pan = null;
+  svg.addEventListener("pointerdown", e => {
+    if (e.target.tagName === "circle") return;
+    pan = { x: e.clientX, y: e.clientY, tx, ty };
+    svg.setPointerCapture(e.pointerId);
+    svg.style.cursor = "grabbing";
+  });
+  svg.addEventListener("pointermove", e => {
+    if (!pan) return;
+    const r = svg.getBoundingClientRect();
+    tx = pan.tx + (e.clientX - pan.x) * (W / r.width);
+    ty = pan.ty + (e.clientY - pan.y) * (H / r.height);
+    apply();
+  });
+  const endPan = () => { pan = null; svg.style.cursor = ""; };
+  svg.addEventListener("pointerup", endPan);
+  svg.addEventListener("pointerleave", endPan);
+
+  on("#graphReset", "onclick", () => {
+    z = 1; tx = ty = 0; apply();
+    nodes.forEach(n => { n.fx = n.fy = null; });
+    circles.forEach(c => c.setAttribute("stroke", "var(--surface)"));
+    sim.alpha(1).restart();
   });
 }
 

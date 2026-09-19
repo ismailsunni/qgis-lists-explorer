@@ -9,7 +9,7 @@
      from them, so it keeps the source's posture. See README > Privacy. -->
 <meta name="robots" content="noindex, follow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📬</text></svg>">
-<link rel="stylesheet" href="style.css?v=eb97f14292">
+<link rel="stylesheet" href="style.css?v=699608f2ba">
 </head>
 <body>
 <header class="top">
@@ -94,10 +94,13 @@
         <p class="hint">The 80 most active people, joined when they appear in the same thread.
           Node size is messages sent; line weight is threads shared.</p>
       </div>
-      <label class="check">Min. shared threads
-        <input type="range" id="minEdge" min="1" max="40" value="5">
-        <b id="minEdgeVal">5</b>
-      </label>
+      <div class="graph-ctl">
+        <label class="check">Min. shared threads
+          <input type="range" id="minEdge" min="1" max="40" value="5">
+          <b id="minEdgeVal">5</b>
+        </label>
+        <button class="ghost wide" id="graphReset" title="Unpin every node and re-run the layout">Reset</button>
+      </div>
     </div>
     <div class="chart" id="graph"></div>
     <p class="note" id="graphNote"></p>
@@ -151,6 +154,7 @@
 </main>
 
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=f90ad0255c"></script>
+<script src="vendor/d3-force.min.js?v=af6c6bf81a"></script>
+<script src="app.js?v=c31bd95436"></script>
 </body>
 </html>
